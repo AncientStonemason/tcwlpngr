@@ -26,7 +26,7 @@ final class SharedCameraRows {
                 .showIf(() -> !c.motion.aether()));
         rows.add(new Rows.Number(
                         "Выраженность человеческого трекинга",
-                        "Больше — заметнее инерция/допуск. Редкий перелёт — только короткое окно доводки новой цели, не постоянное раскачивание. Задержка в мс;0% убирает её. На дальней цели допуски меньше",
+                        "Больше — заметнее инерция/допуск. Редкий перелёт — только короткое окно доводки новой цели, не постоянное раскачивание. Задержка в мс; 0% убирает её. На дальней цели допуски меньше",
                         () -> c.motion.camera.aimHumanStrength,
                         v -> {
                             c.motion.camera.aimHumanStrength = (int) Math.round(v);
@@ -51,7 +51,7 @@ final class SharedCameraRows {
                 .showIf(() -> !c.motion.aether() && "human".equals(c.motion.camera.aimTrackingMode)));
         rows.add(new Rows.Number(
                         "Амплитуда джиттера",
-                        "По умолчанию0.12°, pitch меньше yaw; чувствительность может скрыть очень малый offset",
+                        "По умолчанию 0.12°, pitch меньше yaw; чувствительность может скрыть очень малый offset",
                         () -> c.motion.camera.aimJitterDegrees,
                         v -> {
                             c.motion.camera.aimJitterDegrees = v;
@@ -106,7 +106,7 @@ final class SharedCameraRows {
                 v -> Rows.num(v) + "°/с"));
         rows.add(new Rows.Number(
                 "Базовая скорость наведения",
-                "Градусы в секунду, можно ввести100. Общий предел: автоматический Combat использует движок/множители, «Только наведение» — эту скорость напрямую, без хуманайза",
+                "Градусы в секунду, можно ввести 100. Общий предел: автоматический Combat использует движок/множители, «Только наведение» — эту скорость напрямую, без хуманайза",
                 () -> c.motion.camera.aimTurnSpeed,
                 v -> {
                     c.motion.camera.aimTurnSpeed = v;
@@ -119,7 +119,7 @@ final class SharedCameraRows {
                 v -> Rows.num(v) + "°/с"));
         rows.add(new Rows.Number(
                 "Скорость захвата",
-                "Множитель базы для основного разворота. По умолчанию135%; после доводки переходит к скорости сопровождения. Не отменяет задержку Human",
+                "Множитель базы для основного разворота. По умолчанию 135%; после доводки переходит к скорости сопровождения. Не отменяет задержку Human",
                 () -> c.motion.camera.aimAcquireSpeedPct,
                 v -> {
                     c.motion.camera.aimAcquireSpeedPct = (int) Math.round(v);
@@ -132,7 +132,7 @@ final class SharedCameraRows {
                 v -> Rows.num(v) + "%"));
         rows.add(new Rows.Number(
                 "Скорость сопровождения",
-                "Множитель базы после захвата. По умолчанию100%; отдельный от скорости осмотра и разворота к Special",
+                "Множитель базы после захвата. По умолчанию 100%; отдельный от скорости осмотра и разворота к Special",
                 () -> c.motion.camera.aimTrackSpeedPct,
                 v -> {
                     c.motion.camera.aimTrackSpeedPct = (int) Math.round(v);
@@ -145,7 +145,7 @@ final class SharedCameraRows {
                 v -> Rows.num(v) + "%"));
         rows.add(new Rows.Number(
                 "Разворот к Special",
-                "Минимальная базовая скорость основного разворота к подтверждённому Special Zealot, до случайного множителя. По умолчанию900°/с; затем обычное сопровождение. Не телепорт камеры",
+                "Минимальная базовая скорость основного разворота к подтверждённому Special Zealot, до случайного множителя. По умолчанию 900°/с; затем обычное сопровождение. Не телепорт камеры",
                 () -> c.motion.camera.aimSpecialTurnSpeed,
                 v -> {
                     c.motion.camera.aimSpecialTurnSpeed = v;
@@ -158,7 +158,7 @@ final class SharedCameraRows {
                 v -> Rows.num(v) + "°/с"));
         rows.add(new Rows.Number(
                 "Разброс скорости наведения",
-                "Плавный множитель к базовой скорости: например100 и25% → примерно75–125°/с. Не новый бросок случайности каждый кадр.0% — без разброса",
+                "Плавный множитель к базовой скорости: например 100 и 25% → примерно 75–125°/с. Не новый бросок случайности каждый кадр. 0% — без разброса",
                 () -> c.motion.camera.aimSpeedVariationPct,
                 v -> {
                     c.motion.camera.aimSpeedVariationPct = (int) Math.round(v);
