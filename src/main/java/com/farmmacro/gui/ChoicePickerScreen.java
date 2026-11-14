@@ -18,6 +18,7 @@ public final class ChoicePickerScreen extends Screen {
     private final List<FlatButton> buttons = new ArrayList<>();
     private EditBox search;
     private String query = "";
+    private boolean initialized;
     private int offset, cursor, visibleRows, x, y, w, h;
 
     public ChoicePickerScreen(
@@ -54,14 +55,19 @@ public final class ChoicePickerScreen extends Screen {
             query = value;
             filter();
         });
+        int keepOffset = offset, keepCursor = cursor;
         filter();
-        if (query.isBlank())
+        if (initialized) {
+            offset = keepOffset;
+            cursor = keepCursor;
+        } else if (query.isBlank())
             for (int i = 0; i < filtered.size(); i++)
                 if (filtered.get(i).id().equals(current)) {
                     cursor = i;
                     offset = Math.max(0, i - visibleRows / 2);
                     break;
                 }
+        initialized = true;
         refresh();
         setInitialFocus(search);
     }

@@ -72,6 +72,7 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
     private double scroll;
     private final DragWindow dragWindow = new DragWindow();
     private boolean modified;
+    private boolean closed;
     private String tooltip;
     private boolean wantHand;
 
@@ -834,6 +835,8 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
             for (var l : lines) tw = Math.max(tw, font.width(l));
             int tx = Math.min(mx + 10, width - tw - 14), ty = my + 12;
             if (ty + lines.size() * 10 + 8 > height - 4) ty = my - lines.size() * 10 - 10;
+            tx = Math.max(2, tx);
+            ty = Math.max(2, Math.min(ty, height - lines.size() * 10 - 10));
             Ui.roundBordered(g, tx, ty, tw + 12, lines.size() * 10 + 8, 4, Ui.TOOLTIP, Ui.BORDER);
             int ly = ty + 5;
             for (var l : lines) {
@@ -911,10 +914,21 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
     }
 
     @Override
-    public void onClose() {
+    public void removed() {
+        finishOnce();
+    }
+
+    private void finishOnce() {
         Rows.clearWheelFocus();
         Rows.blurText();
+        if (closed) return;
+        closed = true;
         t.close(modified);
+    }
+
+    @Override
+    public void onClose() {
+        finishOnce();
         minecraft.setScreen(parent);
     }
 
