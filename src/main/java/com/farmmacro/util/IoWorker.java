@@ -111,6 +111,13 @@ public final class IoWorker {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
+            } catch (VirtualMachineError e) {
+                throw e;
+            } catch (Throwable t) {
+                // иначе поток умирает, а thread != null: очередь больше не разбирается, flush() вечно ждёт
+                FAILED.incrementAndGet();
+                lastError = t.getClass().getSimpleName();
+                LOGGER.error("Фоновая запись «{}» упала", key, t);
             } finally {
                 synchronized (LOCK) {
                     inFlight--;
@@ -127,7 +134,7 @@ public final class IoWorker {
                 task.run();
                 DONE.incrementAndGet();
                 return true;
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | RuntimeException | LinkageError | AssertionError e) {
                 lastError = e.getClass().getSimpleName();
                 if (attempt >= BACKOFF_MS.length) {
                     FAILED.incrementAndGet();

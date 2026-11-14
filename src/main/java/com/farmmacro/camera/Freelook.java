@@ -70,10 +70,7 @@ public final class Freelook {
     /** Каждый тик: режим «держать» и выход из мира. */
     public static void tick(Minecraft mc) {
         if (mc.player == null || mc.level == null) {
-            if (active) {
-                active = false;
-                prevType = null;
-            }
+            if (active) off(mc, null);
             return;
         }
         if (ModConfig.INSTANCE.freelookHold && FarmMacroMod.keyFreelook != null) {

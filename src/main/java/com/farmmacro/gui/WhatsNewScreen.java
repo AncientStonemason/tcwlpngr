@@ -33,6 +33,9 @@ public class WhatsNewScreen extends Screen implements Rows.Ctx {
     private final List<String> items = load();
     private double scroll;
     private String tooltip;
+    private List<String[]> cachedLines;
+    private int cachedWidth = -1;
+    private Font cachedFont;
 
     public WhatsNewScreen(Screen parent) {
         super(Component.literal("Что нового в Kaelix " + VERSION));
@@ -98,20 +101,27 @@ public class WhatsNewScreen extends Screen implements Rows.Ctx {
         Ui.text(g, font, getTitle().getString(), x + 10, y + 9, Ui.TEXT);
         g.fill(x + 10, y + 22, x + w - 10, y + 23, Ui.BORDER);
         int cx = x + 12, cy = y + 28, cw = w - 24, ch = bY() - cy - 6;
-        List<String[]> lines = new ArrayList<>(); // {текст, тип: h — заголовок, b — пункт, c — продолжение}
-        for (String it : items) {
-            boolean head = it.startsWith("## ");
-            String t = head ? it.substring(3) : it;
-            var split = font.split(Component.literal(t), cw - (head ? 0 : 10));
-            for (int i = 0; i < split.size(); i++) {
-                StringBuilder sb = new StringBuilder();
-                split.get(i).accept((idx, st, cp) -> {
-                    sb.appendCodePoint(cp);
-                    return true;
-                });
-                lines.add(new String[] {sb.toString(), head ? "h" : i == 0 ? "b" : "c"});
+        if (cachedLines == null || cachedWidth != cw || cachedFont != font) {
+            // {текст, тип: h — заголовок, b — пункт, c — продолжение}
+            List<String[]> built = new ArrayList<>();
+            for (String it : items) {
+                boolean head = it.startsWith("## ");
+                String t = head ? it.substring(3) : it;
+                var split = font.split(Component.literal(t), cw - (head ? 0 : 10));
+                for (int i = 0; i < split.size(); i++) {
+                    StringBuilder sb = new StringBuilder();
+                    split.get(i).accept((idx, st, cp) -> {
+                        sb.appendCodePoint(cp);
+                        return true;
+                    });
+                    built.add(new String[] {sb.toString(), head ? "h" : i == 0 ? "b" : "c"});
+                }
             }
+            cachedLines = built;
+            cachedWidth = cw;
+            cachedFont = font;
         }
+        List<String[]> lines = cachedLines;
         int total = 0;
         for (String[] l : lines) total += "h".equals(l[1]) ? 15 : 10;
         scroll = Math.max(0, Math.min(Math.max(0, total - ch), scroll));
@@ -157,7 +167,19 @@ public class WhatsNewScreen extends Screen implements Rows.Ctx {
             onClose();
             return true;
         }
-        return super.keyPressed(e);
+        int page = Math.max(10, bY() - (wY() + 28) - 16);
+        switch (e.key()) {
+            case GLFW.GLFW_KEY_UP -> scroll -= 10;
+            case GLFW.GLFW_KEY_DOWN -> scroll += 10;
+            case GLFW.GLFW_KEY_PAGE_UP -> scroll -= page;
+            case GLFW.GLFW_KEY_PAGE_DOWN -> scroll += page;
+            case GLFW.GLFW_KEY_HOME -> scroll = 0;
+            case GLFW.GLFW_KEY_END -> scroll = Integer.MAX_VALUE; // зажимается при отрисовке
+            default -> {
+                return super.keyPressed(e);
+            }
+        }
+        return true;
     }
 
     @Override

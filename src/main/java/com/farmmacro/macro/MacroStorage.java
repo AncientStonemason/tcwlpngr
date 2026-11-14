@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -58,7 +57,7 @@ public class MacroStorage {
 
     public record MacroInfo(String name, int frameCount, String filename, long modified) {}
 
-    private final Map<String, MacroInfo> infoCache = new HashMap<>();
+    private final Map<String, MacroInfo> infoCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     // ── Сохранение ───────────────────────────────────────────────────────────
 
@@ -125,10 +124,12 @@ public class MacroStorage {
     public List<MacroInfo> listMacros() {
         List<MacroInfo> result = new ArrayList<>();
         if (!Files.isDirectory(MACRO_DIR)) return result;
+        java.util.Set<String> seen = new java.util.HashSet<>();
         try (Stream<Path> s = Files.list(MACRO_DIR)) {
             for (Path f :
                     (Iterable<Path>) s.filter(p -> p.getFileName().toString().endsWith(".json"))::iterator) {
                 String fn = f.getFileName().toString();
+                seen.add(fn);
                 long mod = Files.getLastModifiedTime(f).toMillis();
                 MacroInfo cached = infoCache.get(fn);
                 if (cached == null || cached.modified() != mod) {
@@ -138,6 +139,7 @@ public class MacroStorage {
                 }
                 result.add(cached);
             }
+            infoCache.keySet().retainAll(seen);
         } catch (Exception e) {
             LOGGER.warn("Не удалось прочитать список макросов: {}", e.toString());
         }
@@ -221,9 +223,6 @@ public class MacroStorage {
     }
 
     public static String sanitize(String name) {
-        return name.trim()
-                .replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_")
-                .replaceAll("\\s+", "_")
-                .replaceAll("^\\.+", "");
+        return FileNames.sanitize(name);
     }
 }

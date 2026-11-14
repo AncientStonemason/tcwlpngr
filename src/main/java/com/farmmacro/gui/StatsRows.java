@@ -3,6 +3,7 @@ package com.farmmacro.gui;
 import com.farmmacro.config.ModConfig;
 import com.farmmacro.hud.StatsHud;
 import com.farmmacro.stats.*;
+import com.farmmacro.util.Clock;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -114,28 +115,28 @@ public final class StatsRows {
         rows.add(new Rows.Note(StatsLedger::status, Ui.SUB));
         rows.add(new Rows.Buttons(
                 new Rows.Btn(
-                        () -> System.nanoTime() < confirmSession
+                        () -> Clock.millis() < confirmSession
                                 ? "Подтвердить сброс сессии"
                                 : "Сбросить сессию статистики",
                         () -> Rows.Style.SECONDARY,
                         () -> {
-                            long now = System.nanoTime();
+                            long now = Clock.millis();
                             if (now >= confirmSession) {
-                                confirmSession = now + 3_000_000_000L;
+                                confirmSession = now + 3_000L;
                                 return;
                             }
                             confirmSession = 0;
                             Telemetry.resetSession();
                         }),
                 new Rows.Btn(
-                                () -> System.nanoTime() < confirmAll
+                                () -> Clock.millis() < confirmAll
                                         ? "Подтвердить сброс ВСЕГО"
                                         : "Сбросить daily / lifetime",
                                 () -> Rows.Style.DANGER,
                                 () -> {
-                                    long now = System.nanoTime();
+                                    long now = Clock.millis();
                                     if (now >= confirmAll) {
-                                        confirmAll = now + 3_000_000_000L;
+                                        confirmAll = now + 3_000L;
                                         return;
                                     }
                                     confirmAll = 0;
@@ -156,12 +157,12 @@ public final class StatsRows {
                                 + SessionHistory.runs().size() + ")"));
                 }),
                 new Rows.Btn(
-                        () -> System.nanoTime() < confirmHistory ? "Точно очистить?" : "Очистить историю",
+                        () -> Clock.millis() < confirmHistory ? "Точно очистить?" : "Очистить историю",
                         () -> Rows.Style.DANGER,
                         () -> {
-                            long now = System.nanoTime();
+                            long now = Clock.millis();
                             if (now >= confirmHistory) {
-                                confirmHistory = now + 3_000_000_000L;
+                                confirmHistory = now + 3_000L;
                                 return;
                             }
                             confirmHistory = 0;
