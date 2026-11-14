@@ -44,7 +44,7 @@ final class MotionRows {
                 Ui.SUB));
         rows.add(new Rows.Selector(
                         "Пресет Aether",
-                        "Применит исходные параметры камеры/паузы ряда. Имена Safe/Efficient из upstream не обещают безопасность или скорость. Efficient действительно имеет 6мс/градус, остальные 2.",
+                        "Применит исходные параметры камеры/паузы ряда. Имена Safe/Efficient из upstream не обещают безопасность или скорость. Efficient действительно имеет 6 мс/градус, остальные 2.",
                         () -> List.of(
                                 new Rows.Choice("normal", "Normal"),
                                 new Rows.Choice("safe", "Safe (upstream)"),
@@ -104,7 +104,7 @@ final class MotionRows {
         var n = new N();
         rows.add(new Rows.Toggle(
                         "Плавные привязки к точкам",
-                        "Aether, маршруты: стоять до подтверждённого угла. Нужна опора; нет полёта/воды/лестницы. Сдвиг >0.75бл, потеря опоры, ввод, окно или таймаут — локальный стоп без автопродолжения. Запись не меняется.",
+                        "Aether, маршруты: стоять до подтверждённого угла. Нужна опора; нет полёта/воды/лестницы. Сдвиг > 0.75 бл, потеря опоры, ввод, окно или таймаут — локальный стоп без автопродолжения. Запись не меняется.",
                         () -> s.smoothBindings,
                         v -> {
                             s.smoothBindings = v;
@@ -114,7 +114,7 @@ final class MotionRows {
                 .showIf(s::aether));
         n.n(
                 "Скорость привязки, °/с",
-                "Предел для привязок точек, не скорость сопровождения цели. Default120, диапазон20–360. Тик маршрута ждёт завершения.",
+                "Предел для привязок точек, не скорость сопровождения цели. Default 120, диапазон 20–360. Тик маршрута ждёт завершения.",
                 () -> s.bindingSpeed,
                 v -> s.bindingSpeed = v,
                 20,
@@ -123,7 +123,7 @@ final class MotionRows {
                 true);
         n.n(
                 "Базовое время Aether, мс",
-                "Фактическое время: не меньше 150мс, базы с ±15% и угла × мс/градус. Предел скорости остаётся у вызывающей задачи.",
+                "Фактическое время: не меньше 150 мс, базы с ±15% и угла × мс/градус. Предел скорости остаётся у вызывающей задачи.",
                 () -> s.rotationMs,
                 v -> s.rotationMs = (int) v,
                 0,
@@ -163,7 +163,10 @@ final class MotionRows {
                 15,
                 1,
                 true);
-        n.n("Шум трекинга: максимум, %", null, () -> s.noiseMaxPct, v -> s.noiseMaxPct = v, 0, 15, 1, true);
+        n.n("Шум трекинга: максимум, %", null, () -> s.noiseMaxPct, v -> {
+                    s.noiseMaxPct = v;
+                    s.noiseMinPct = Math.min(s.noiseMinPct, v);
+                }, 0, 15, 1, true);
         n.n(
                 "Aether: разброс yaw фермы, °",
                 "Замещает диапазон Kaelix схемы только в режиме Aether; исходный пресет 0.",
@@ -184,7 +187,7 @@ final class MotionRows {
                 true);
         rows.add(new Rows.Toggle(
                         "Заминка на поворотах / этажах",
-                        "Только фермерские схемы: угол от25°, метка поворота, переход высоты или спуск. Нет случайных стопов на прямой. Явная более долгая пауза не сокращается; это максимум, не сумма.",
+                        "Только фермерские схемы: угол от 25°, метка поворота, переход высоты или спуск. Нет случайных стопов на прямой. Явная более долгая пауза не сокращается; это максимум, не сумма.",
                         () -> s.boundaryPauses,
                         v -> {
                             s.boundaryPauses = v;
@@ -196,13 +199,19 @@ final class MotionRows {
                 "Kaelix: поворот максимум, мс",
                 null,
                 () -> s.cornerMaxMs,
-                v -> s.cornerMaxMs = (int) v,
+                v -> {
+                    s.cornerMaxMs = (int) v;
+                    s.cornerMinMs = Math.min(s.cornerMinMs, s.cornerMaxMs);
+                },
                 0,
                 2000,
                 10,
                 false);
         n.n("Aether: смена ряда минимум, мс", null, () -> s.laneMinMs, v -> s.laneMinMs = (int) v, 0, 2000, 10, true);
-        n.n("Aether: смена ряда максимум, мс", null, () -> s.laneMaxMs, v -> s.laneMaxMs = (int) v, 0, 2000, 10, true);
+        n.n("Aether: смена ряда максимум, мс", null, () -> s.laneMaxMs, v -> {
+                    s.laneMaxMs = (int) v;
+                    s.laneMinMs = Math.min(s.laneMinMs, s.laneMaxMs);
+                }, 0, 2000, 10, true);
         n.n(
                 "Этаж минимум, мс",
                 "Общее расширение Kaelix, не скопированный параметр Aether. Также после приземления.",
@@ -212,7 +221,10 @@ final class MotionRows {
                 2000,
                 10,
                 false);
-        n.n("Этаж максимум, мс", null, () -> s.floorMaxMs, v -> s.floorMaxMs = (int) v, 0, 2000, 10, false);
+        n.n("Этаж максимум, мс", null, () -> s.floorMaxMs, v -> {
+                    s.floorMaxMs = (int) v;
+                    s.floorMinMs = Math.min(s.floorMinMs, s.floorMaxMs);
+                }, 0, 2000, 10, false);
         rows.add(new Rows.Note(
                 "Общий трекинг Motion — параметры для сопровождения и осмотра. Скорость привязок и точных записей задаётся задачей; режим двигателя общий.",
                 Ui.SUB));
@@ -269,7 +281,11 @@ final class MotionRows {
                 .under(() -> ModConfig.INSTANCE.camSmooth && ModConfig.INSTANCE.camMouseLike)
                 .adv());
 
-        for (int i = firstControl + 1; i < rows.size(); i++) rows.get(i).enabledIf(MotionRows::idle);
+        for (int i = firstControl + 1; i < rows.size(); i++) {
+            Rows.Row r = rows.get(i);
+            BooleanSupplier own = r.enabled;
+            r.enabledIf(() -> idle() && own.getAsBoolean());
+        }
     }
 
     static boolean idle() {

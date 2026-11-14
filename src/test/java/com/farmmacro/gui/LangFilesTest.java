@@ -9,9 +9,13 @@ import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -23,6 +27,8 @@ import org.junit.jupiter.api.Test;
 
 /** en_us и ru_ru — одинаковые ключи; всё, что код спрашивает через {@link Tr}, есть в обоих. */
 class LangFilesTest {
+    private static final Pattern CYRILLIC = Pattern.compile("[\\u0400-\\u04FF]");
+
     private static Map<String, String> lang(String code) throws IOException {
         try (InputStream in = LangFilesTest.class.getResourceAsStream("/assets/farmmacro/lang/" + code + ".json")) {
             if (in == null) throw new IOException("нет " + code);
@@ -34,8 +40,14 @@ class LangFilesTest {
         }
     }
 
-    private static long placeholders(String s) {
-        return Pattern.compile("%(\\d+\\$)?[sd]").matcher(s).results().count();
+    private static List<String> placeholders(String s) {
+        List<String> found = new ArrayList<>(Pattern.compile("%(?:\\d+\\$)?[-#+ 0,(]*\\d*(?:\\.\\d+)?[a-zA-Z]")
+                .matcher(s)
+                .results()
+                .map(r -> r.group())
+                .toList());
+        Collections.sort(found);
+        return found;
     }
 
     @Test
@@ -48,7 +60,8 @@ class LangFilesTest {
         for (String k : en.keySet()) {
             assertFalse(en.get(k).isBlank(), "пусто в en_us: " + k);
             assertFalse(ru.get(k).isBlank(), "пусто в ru_ru: " + k);
-            assertEquals(placeholders(en.get(k)), placeholders(ru.get(k)), "разное число %s: " + k);
+            assertEquals(placeholders(en.get(k)), placeholders(ru.get(k)), "разные подстановки %s/%d: " + k);
+            assertFalse(CYRILLIC.matcher(en.get(k)).find(), "русский текст в en_us: " + k);
         }
     }
 
@@ -72,19 +85,76 @@ class LangFilesTest {
         }
     }
 
+    /** Tr.t("ключ", "текст") с литералами; допускает перенос строки после скобки и запятой. */
+    private static final Pattern TR_CALL =
+            Pattern.compile("Tr\\.t\\(\\s*\"([a-z0-9_.]+)\"\\s*,\\s*\"((?:[^\"\\\\\\n]|\\\\.)*)\"\\s*\\)");
+    private static final Pattern TR_KEY = Pattern.compile("Tr\\.t\\(\\s*\"([a-z0-9_.]+)\"");
+
+    private static List<Path> mainSources() throws IOException {
+        try (Stream<Path> files = Files.walk(Path.of("src/main/java"))) {
+            return files.filter(p -> p.toString().endsWith(".java")).toList();
+        }
+    }
+
     @Test
     void everyLiteralTrKeyInSourcesExists() throws IOException {
-        Map<String, String> en = lang("en_us");
-        Pattern call = Pattern.compile("Tr\\.t\\(\"([a-z0-9_.]+)\"\\s*,"); // только целые ключи-литералы
-        Path root = Path.of("src/main/java");
+        Map<String, String> en = lang("en_us"), ru = lang("ru_ru");
         Set<String> missing = new TreeSet<>();
-        try (Stream<Path> files = Files.walk(root)) {
-            for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
-                Matcher m = call.matcher(Files.readString(f, StandardCharsets.UTF_8));
-                while (m.find())
-                    if (!en.containsKey(m.group(1))) missing.add(m.group(1) + " (" + f.getFileName() + ")");
+        int seen = 0;
+        for (Path f : mainSources()) {
+            Matcher m = TR_KEY.matcher(Files.readString(f, StandardCharsets.UTF_8));
+            while (m.find()) {
+                seen++;
+                String key = m.group(1);
+                if (!en.containsKey(key) || !ru.containsKey(key)) missing.add(key + " (" + f.getFileName() + ")");
             }
         }
+        assertTrue(seen > 0, "не найдено ни одного вызова Tr.t — проверка сломалась");
         assertTrue(missing.isEmpty(), "ключи без перевода: " + missing);
+    }
+
+    /** При русском языке игры текст из ru_ru обязан совпадать с русским текстом по умолчанию в коде. */
+    @Test
+    void ruLangMatchesCodeFallback() throws IOException {
+        Map<String, String> ru = lang("ru_ru");
+        Set<String> differs = new TreeSet<>();
+        for (Path f : mainSources()) {
+            Matcher m = TR_CALL.matcher(Files.readString(f, StandardCharsets.UTF_8));
+            while (m.find()) {
+                String fallback = m.group(2).replace("\\\"", "\"").replace("\\\\", "\\");
+                if (ru.containsKey(m.group(1)) && !ru.get(m.group(1)).equals(fallback))
+                    differs.add(m.group(1) + " (" + f.getFileName() + ")");
+            }
+        }
+        assertTrue(differs.isEmpty(), "ru_ru расходится с текстом по умолчанию: " + differs);
+    }
+
+    @Test
+    void moduleTextsMatchRuLang() throws Exception {
+        Map<String, String> ru = lang("ru_ru");
+        Field title = ModuleCatalog.Module.class.getDeclaredField("title");
+        Field desc = ModuleCatalog.Module.class.getDeclaredField("description");
+        title.setAccessible(true);
+        desc.setAccessible(true);
+        for (ModuleCatalog.Module m : ModuleCatalog.ALL) {
+            assertEquals(title.get(m), ru.get("farmmacro.module." + m.id() + ".title"), "заголовок " + m.id());
+            assertEquals(desc.get(m), ru.get("farmmacro.module." + m.id() + ".desc"), "описание " + m.id());
+        }
+    }
+
+    /** Каждый ключ lang либо используется кодом, либо входит в известные семейства (клавиши, субтитры, каталог). */
+    @Test
+    void noOrphanKeys() throws IOException {
+        Map<String, String> en = lang("en_us");
+        StringBuilder all = new StringBuilder();
+        for (Path f : mainSources()) all.append(Files.readString(f, StandardCharsets.UTF_8)).append('\n');
+        String src = all.toString();
+        Set<String> orphans = new TreeSet<>();
+        for (String k : en.keySet()) {
+            if (k.startsWith("farmmacro.module.") || k.startsWith("farmmacro.category.")) continue;
+            if (k.equals("key.category.farmmacro.general") || k.startsWith("subtitles.farmmacro.")) continue;
+            if (!src.contains("\"" + k + "\"")) orphans.add(k);
+        }
+        assertTrue(orphans.isEmpty(), "ключи lang, которые код не использует: " + orphans);
     }
 }

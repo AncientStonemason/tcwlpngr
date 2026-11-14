@@ -4,6 +4,7 @@ import com.farmmacro.FarmMacroMod;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /** Canonical English GAME-message allowlist; never player CHAT or actionbar substring matching. */
 public final class FishingMessages {
@@ -27,8 +28,10 @@ public final class FishingMessages {
         }
     }
 
+    private static final Pattern FORMAT = Pattern.compile("§.");
+
     public static String clean(String s) {
-        return s == null ? "" : s.replaceAll("§.", "").strip();
+        return s == null ? "" : FORMAT.matcher(s).replaceAll("").strip();
     }
 
     public static boolean creature(String s) {

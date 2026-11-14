@@ -121,6 +121,7 @@ public final class DiscordNotify {
         POOL.getQueue().clear();
         recent.clear();
         suspended = false;
+        blockedUntil = 0; // a new webhook / manual reset must not stay behind an old Retry-After
         lastQueued = 0;
     }
 
