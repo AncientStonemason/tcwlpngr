@@ -95,7 +95,9 @@ public final class Diagnostics {
                 .orElse("?");
         StringBuilder b = new StringBuilder("Kaelix diagnostics v1 / ")
                 .append(v)
-                .append("\nMC 26.1.2 / Fabric / Java ")
+                .append("\nMC ")
+                .append(net.minecraft.SharedConstants.getCurrentVersion().name())
+                .append(" / Fabric / Java ")
                 .append(Runtime.version().feature())
                 .append("\nProfile: ")
                 .append("zealots".equals(c.combatProfileId) ? "zealots" : "custom (name omitted)");
