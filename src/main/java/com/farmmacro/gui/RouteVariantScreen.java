@@ -28,7 +28,8 @@ public final class RouteVariantScreen extends Screen {
         addRenderableWidget(Button.builder(Component.literal("Сохранить копией"), b -> {
                     boolean ok = RouteVariants.saveCopy();
                     MacroManager.INSTANCE.msgPublic(
-                            minecraft, ok ? "§aВариант сохранён как _rnd" : "§cНет превью или ошибка сохранения");
+                            minecraft,
+                            ok ? "§aВариант сохранён копией (…_rnd)" : "§cНет превью или ошибка сохранения");
                 })
                 .bounds(x + 174, y, 130, 20)
                 .build());
