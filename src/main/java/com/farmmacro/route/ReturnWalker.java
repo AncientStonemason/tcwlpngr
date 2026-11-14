@@ -294,18 +294,6 @@ public final class ReturnWalker {
         return p;
     }
 
-    /** Найти путь от игрока (без запуска) — для проверки «можно ли дойти». */
-    public static PathFinder.Result plan(Minecraft mc, List<PathFinder.Goal> goals) {
-        return plan(mc, goals, true);
-    }
-
-    public static PathFinder.Result plan(Minecraft mc, List<PathFinder.Goal> goals, boolean fly) {
-        PathJob j = PathJob.start(mc, goals, fly);
-        PathFinder.Result r = j.result();
-        logPlan(r, j);
-        return r;
-    }
-
     private static void logPlan(PathFinder.Result r, PathJob j) {
         EventLog.log(
                 "RETURN",
@@ -610,7 +598,7 @@ public final class ReturnWalker {
             return Status.FAIL;
         }
         if (job != null) return tickJob(mc, p, o);
-        if (!cachedCells.isEmpty()) {
+        if (!cachedCells.isEmpty() && (ticks & 3) == 1) {
             PathLevel live = new PathLevel(mc.level);
             if (!c.chunkCacheEnabled
                     || CachedPathWorld.mismatch(cachedCells, live, k -> mc.level.hasChunk((int) (k >> 32), (int) k))) {

@@ -681,7 +681,7 @@ public final class FarmHud {
         var pd = PanicDetector.INSTANCE;
         long at = pd.getLastPanicMs();
         if (min <= 0 || at <= 0) return 0;
-        long age = System.currentTimeMillis() - at;
+        long age = Clock.wallMillis() - at;
         if (age < 0 || age > min * 60_000L) return 0;
         String id = pd.getLastPanicId();
         String who = id != null ? Detectors.name(id) : "аварийный стоп";

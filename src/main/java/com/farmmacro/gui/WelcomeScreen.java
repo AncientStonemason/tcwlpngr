@@ -635,6 +635,8 @@ public class WelcomeScreen extends Screen implements Rows.Ctx {
             for (var l : lines) tw = Math.max(tw, font.width(l));
             int tx = Math.min(mx + 10, width - tw - 14), ty = my + 12;
             if (ty + lines.size() * 10 + 8 > height - 4) ty = my - lines.size() * 10 - 10;
+            tx = Math.max(2, tx);
+            ty = Math.max(2, Math.min(ty, height - lines.size() * 10 - 10));
             Ui.roundBordered(g, tx, ty, tw + 12, lines.size() * 10 + 8, 4, Ui.TOOLTIP, Ui.BORDER);
             int ly = ty + 5;
             for (var l : lines) {
@@ -706,6 +708,12 @@ public class WelcomeScreen extends Screen implements Rows.Ctx {
     @Override
     public boolean isPauseScreen() {
         return true;
+    }
+
+    @Override
+    public void removed() {
+        Rows.clearWheelFocus();
+        Rows.blurText();
     }
 
     /** Esc — как «Пропустить»: закрыть, больше не показывать сам. */
