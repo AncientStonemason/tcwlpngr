@@ -16,6 +16,7 @@ import com.farmmacro.panic.PanicDetector;
 import com.farmmacro.panic.PanicHandoff;
 import com.farmmacro.route.NavigationInput;
 import com.farmmacro.route.RouteEditor;
+import com.farmmacro.util.Clock;
 import com.farmmacro.window.BackgroundWork;
 import java.util.*;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.phys.Vec3;
 
 /** Attended, explicitly armed fishing. Adapted CC0 workflow; no executors/custom packets/camera/movement. */
