@@ -39,7 +39,8 @@ public final class Mousemat {
     private static Ph ph = Ph.IDLE;
     private static int slot, prevSlot, waitTicks;
     private static float wantYaw, wantPitch;
-    private static long windowUntil;
+    private static long windowUntil, phaseUntil;
+    private static final long PHASE_MAX_MS = 5000;
     private static boolean rotated;
     private static String label = "";
 
@@ -71,7 +72,7 @@ public final class Mousemat {
      * Начать Snap к пресету. @return false — Mousemat не найден (вызывающий решает: обычный поворот или ничего).
      */
     public static boolean start(Minecraft mc, ModConfig.CamPreset preset, String what) {
-        if (NavigationInput.busy() || !PanicHandoff.allowStart(mc)) return false;
+        if (ph != Ph.IDLE || NavigationInput.busy() || !PanicHandoff.allowStart(mc)) return false;
         LocalPlayer p = mc.player;
         if (p == null || preset == null) return false;
         int s = findSlot(p, preset.matSlot);
@@ -85,6 +86,7 @@ public final class Mousemat {
         rotated = false;
         waitTicks = 0;
         ph = Ph.SELECT;
+        phaseUntil = Clock.millis() + PHASE_MAX_MS;
         EventLog.log(
                 "MOUSEMAT",
                 "старт: слот " + (s + 1) + ", ждём yaw " + CameraPresets.deg(wantYaw) + " pitch "
@@ -107,6 +109,11 @@ public final class Mousemat {
             cancel();
             return;
         }
+        if (Clock.millis() > phaseUntil) {
+            EventLog.log("MOUSEMAT", "таймаут фазы " + ph);
+            cancel();
+            return;
+        }
         ModConfig c = ModConfig.INSTANCE;
         var rnd = ThreadLocalRandom.current();
         switch (ph) {
@@ -114,20 +121,26 @@ public final class Mousemat {
                 MacroManager.selectSlot(p, slot);
                 if (p.getInventory().getSelectedSlot() == slot) {
                     ph = Ph.CLICK;
+                    phaseUntil = Clock.millis() + PHASE_MAX_MS;
                     waitTicks = 2 + rnd.nextInt(4);
                 }
             }
             case CLICK -> {
-                if (mc.screen != null) return; // окно открыто — клик не дойдёт, ждём
+                if (mc.screen != null) {
+                    cancel();
+                    return;
+                }
                 if (--waitTicks > 0) return;
                 KeyMapping key = "use".equals(c.mousematClick) ? mc.options.keyUse : mc.options.keyAttack;
                 KeyMapping.click(KeyMappingHelper.getBoundKeyOf(key));
                 windowUntil = Clock.millis() + c.mousematWaitMs;
                 ph = Ph.WAIT;
+                phaseUntil = windowUntil + PHASE_MAX_MS;
             }
             case WAIT -> {
                 if (rotated) {
                     ph = Ph.RESTORE;
+                    phaseUntil = Clock.millis() + PHASE_MAX_MS;
                     waitTicks = 3 + rnd.nextInt(6);
                     return;
                 }
@@ -138,6 +151,7 @@ public final class Mousemat {
                                     + " мс — проверь, что в нём сохранён угол пресета");
                     EventLog.log("MOUSEMAT", "нет поворота от сервера");
                     ph = Ph.RESTORE;
+                    phaseUntil = Clock.millis() + PHASE_MAX_MS;
                     waitTicks = 2;
                 }
             }
