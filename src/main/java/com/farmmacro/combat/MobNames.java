@@ -3,6 +3,7 @@ package com.farmmacro.combat;
 import com.farmmacro.panic.ServerText;
 import com.farmmacro.util.Diagnostics;
 import com.farmmacro.util.LoadedEntities;
+import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -21,7 +22,14 @@ public final class MobNames {
             .filter(n -> !n.isBlank())
             .map(n -> n.toLowerCase(Locale.ROOT))
             .collect(Collectors.toUnmodifiableSet());
-    private static ClientLevel cachedWorld;
+    private static final int CLEAN_CACHE_MAX = 512;
+    private static final Map<String, String> CLEAN_CACHE = Collections.synchronizedMap(new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+            return size() > CLEAN_CACHE_MAX;
+        }
+    });
+    private static WeakReference<ClientLevel> cachedWorld = new WeakReference<>(null);
     private static final Map<Mob, String> CONFIRMED = new WeakHashMap<>();
     private static final Pattern ZEALOT =
             Pattern.compile("(?i)(?<![a-z])(?:special\\s+)?zealot(?:\\s+bruiser)?(?![a-z])");
@@ -29,6 +37,14 @@ public final class MobNames {
     public record Named(Mob mob, String name) {}
 
     public static String clean(String raw) {
+        String hit = CLEAN_CACHE.get(raw);
+        if (hit != null) return hit;
+        String out = cleanUncached(raw);
+        CLEAN_CACHE.put(raw, out);
+        return out;
+    }
+
+    private static String cleanUncached(String raw) {
         String s = ServerText.clean(raw);
         s = LEVEL.matcher(s).replaceFirst("");
         s = HEALTH.matcher(s).replaceFirst("").strip();
@@ -43,8 +59,8 @@ public final class MobNames {
     }
 
     public static List<Named> nearby(Minecraft mc, double radius) {
-        if (cachedWorld != mc.level) {
-            cachedWorld = mc.level;
+        if (cachedWorld.get() != mc.level) {
+            cachedWorld = new WeakReference<>(mc.level);
             CONFIRMED.clear();
         }
         if (mc.player == null || mc.level == null) return List.of();
@@ -72,8 +88,10 @@ public final class MobNames {
         }
         // One armor-stand label has one nearest compatible real body, independent of iteration order.
         Map<Entity, LabelMatch> owners = new IdentityHashMap<>();
+        Map<Mob, Boolean> generics = new IdentityHashMap<>();
+        for (Mob m : mobs) generics.put(m, generic(m));
         for (Mob m : mobs) {
-            if (!generic(m)) continue;
+            if (!generics.getOrDefault(m, true)) continue;
             int cx = (int) Math.floor(m.getX() / 4), cz = (int) Math.floor(m.getZ() / 4);
             for (int x = cx - 1; x <= cx + 1; x++)
                 for (int z = cz - 1; z <= cz + 1; z++)
@@ -111,7 +129,7 @@ public final class MobNames {
         List<Named> out = new ArrayList<>();
         for (Mob m : mobs) {
             String name = m.getCustomName() != null ? clean(m.getCustomName().getString()) : "";
-            boolean confirmed = !generic(m);
+            boolean confirmed = !generics.getOrDefault(m, true);
             if (!confirmed) {
                 LabelMatch label = names.get(m);
                 if (label != null) {

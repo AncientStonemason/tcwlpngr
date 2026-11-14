@@ -15,6 +15,17 @@ public final class ChunkCacheStore {
     private static final int MAGIC = 0x4b584331, VERSION = 1, MAX_BLOB = 2 * 1024 * 1024, MAX_REGION = 32 * 1024 * 1024;
     private final Path root, dir;
     private final long limit;
+    /** Stores are recreated per call, so serialisation must be process-wide. */
+    private static final Object LOCK = new Object();
+
+    private static final int TRIM_EVERY = 32;
+    private static int putsSinceTrim;
+
+    private static final class CorruptRegionException extends IOException {
+        CorruptRegionException(String m) {
+            super(m);
+        }
+    }
 
     public ChunkCacheStore(Path root, String server, String dimension, long limit) {
         this.root = root;
@@ -48,20 +59,20 @@ public final class ChunkCacheStore {
     private Map<Long, byte[]> readRegion(Path f) throws IOException {
         Map<Long, byte[]> out = new LinkedHashMap<>();
         if (!Files.exists(f)) return out;
-        if (Files.size(f) > MAX_REGION) throw new IOException("oversized region");
+        if (Files.size(f) > MAX_REGION) throw new CorruptRegionException("oversized region");
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(f)))) {
-            if (in.readInt() != MAGIC || in.readInt() != VERSION) throw new IOException("cache version");
+            if (in.readInt() != MAGIC || in.readInt() != VERSION) throw new CorruptRegionException("cache version");
             int n = in.readInt();
-            if (n < 0 || n > 1024) throw new IOException("chunk count");
+            if (n < 0 || n > 1024) throw new CorruptRegionException("chunk count");
             for (int i = 0; i < n; i++) {
                 long key = in.readLong();
                 int size = in.readInt();
-                if (size < 1 || size > MAX_BLOB) throw new IOException("blob size");
+                if (size < 1 || size > MAX_BLOB) throw new CorruptRegionException("blob size");
                 byte[] b = in.readNBytes(size);
-                if (b.length != size) throw new EOFException();
-                if (out.put(key, b) != null) throw new IOException("duplicate chunk");
+                if (b.length != size) throw new CorruptRegionException("truncated");
+                if (out.put(key, b) != null) throw new CorruptRegionException("duplicate chunk");
             }
-            if (in.read() != -1) throw new IOException("trailing region data");
+            if (in.read() != -1) throw new CorruptRegionException("trailing region data");
         }
         return out;
     }
@@ -103,13 +114,19 @@ public final class ChunkCacheStore {
         }
     }
 
-    public synchronized void put(CachedChunk c) throws IOException {
+    public void put(CachedChunk c) throws IOException {
+        synchronized (LOCK) {
+            putLocked(c);
+        }
+    }
+
+    private void putLocked(CachedChunk c) throws IOException {
         Files.createDirectories(dir);
         Path f = file(c.x, c.z);
         Map<Long, byte[]> region;
         try {
             region = readRegion(f);
-        } catch (IOException bad) {
+        } catch (CorruptRegionException | EOFException bad) {
             region = new LinkedHashMap<>();
         }
         long chunkKey = CachedChunk.key(c.x, c.z);
@@ -146,14 +163,23 @@ public final class ChunkCacheStore {
         } finally {
             Files.deleteIfExists(tmp);
         }
-        trim();
+        if (++putsSinceTrim >= TRIM_EVERY) {
+            putsSinceTrim = 0;
+            trim();
+        }
     }
 
-    public synchronized Map<Long, CachedChunk> load(Set<Long> keys) {
+    public Map<Long, CachedChunk> load(Set<Long> keys) {
         return load(keys, () -> false);
     }
 
-    public synchronized Map<Long, CachedChunk> load(Set<Long> keys, BooleanSupplier cancelled) {
+    public Map<Long, CachedChunk> load(Set<Long> keys, BooleanSupplier cancelled) {
+        synchronized (LOCK) {
+            return loadLocked(keys, cancelled);
+        }
+    }
+
+    private Map<Long, CachedChunk> loadLocked(Set<Long> keys, BooleanSupplier cancelled) {
         Map<Path, Set<Long>> groups = new LinkedHashMap<>();
         for (long k : keys)
             groups.computeIfAbsent(file((int) (k >> 32), (int) k), p -> new HashSet<>())
@@ -187,7 +213,13 @@ public final class ChunkCacheStore {
         return out;
     }
 
-    public synchronized void trim() throws IOException {
+    public void trim() throws IOException {
+        synchronized (LOCK) {
+            trimLocked();
+        }
+    }
+
+    private void trimLocked() throws IOException {
         if (!Files.isDirectory(root)) return;
         List<Path> files;
         try (var s = Files.walk(root)) {
@@ -204,7 +236,8 @@ public final class ChunkCacheStore {
         }));
         long total = 0;
         for (Path p : sorted) total += Files.size(p);
-        for (Path p : sorted) {
+        for (int i = 0; i < sorted.size() - 1; i++) {
+            Path p = sorted.get(i);
             if (total <= limit) break;
             long n = Files.size(p);
             Files.deleteIfExists(p);
