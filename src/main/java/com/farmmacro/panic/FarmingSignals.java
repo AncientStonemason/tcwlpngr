@@ -103,7 +103,7 @@ final class FarmingSignals {
         missingTicks = 0;
         xpArmed = false;
         return "При непрерывном сборе пропал ранее видимый текст Farming XP (" + c.farmingXpMissingSec
-                + " с + подтверждение10тиков); это не доказательство проверки/потери XP";
+                + " с + подтверждение 10 тиков); это не доказательство проверки/потери XP";
     }
 
     void reset() {

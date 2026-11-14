@@ -1,12 +1,15 @@
 package com.farmmacro.route;
 
+import com.farmmacro.util.Clock;
+import java.lang.ref.WeakReference;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
 /** Read-only capability. Survival is valid; configuration never grants permission or changes abilities. */
 public final class FlightCapability {
-    private static LocalPlayer player;
-    private static Object world;
+    // Слабые ссылки: после выхода из мира статическое поле не должно держать игрока и весь ClientLevel.
+    private static WeakReference<LocalPlayer> player = new WeakReference<>(null);
+    private static WeakReference<Object> world = new WeakReference<>(null);
     private static Boolean granted, serverFlying;
     private static long observed;
 
@@ -15,17 +18,17 @@ public final class FlightCapability {
     }
 
     public static void packet(Minecraft mc, boolean permission, boolean flying) {
-        player = mc.player;
-        world = mc.level;
+        player = new WeakReference<>(mc.player);
+        world = new WeakReference<>(mc.level);
         granted = permission;
         serverFlying = flying;
-        observed = System.nanoTime();
+        observed = Clock.millis();
     }
 
     public static String describe(Minecraft mc) {
         if (mc.player == null || mc.level == null) return "Полёт: нет игрока/мира";
         var a = mc.player.getAbilities();
-        String packet = player == mc.player && world == mc.level && System.nanoTime() - observed < 30_000_000_000L
+        String packet = player.get() == mc.player && world.get() == mc.level && Clock.millis() - observed < 30_000L
                 ? "; пакет сервера: разрешение=" + granted + ", flying=" + serverFlying
                 : "; свежий пакет способностей не наблюдался";
         return "Полёт: mayfly=" + a.mayfly + ", flying=" + a.flying + packet

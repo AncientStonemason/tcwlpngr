@@ -1,6 +1,7 @@
 package com.farmmacro.macro;
 
 import com.farmmacro.config.ModConfig;
+import com.farmmacro.util.Clock;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -54,7 +55,7 @@ public final class HandDelays {
 
     /** Время сессии для «усталости»: от начала сессии MacroManager (сброс — «Сбросить статистику»). */
     private static long now() {
-        return System.currentTimeMillis();
+        return Clock.millis();
     }
 
     /** Для MacroManager.press: ЛКМ/ПКМ с задержкой; остальные клавиши — как есть. */
