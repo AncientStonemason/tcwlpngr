@@ -2,9 +2,12 @@ package com.farmmacro.gui;
 
 import com.farmmacro.FarmMacroMod;
 import com.farmmacro.macro.MacroManager;
+import com.farmmacro.util.Clock;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -17,7 +20,20 @@ public final class KeybindRows {
         return Component.translatable(key.getName()).getString();
     }
 
+    // Строка читается несколько раз за кадр на каждый бинд: пересчитываем не чаще раза в 250 мс.
+    private static final Map<KeyMapping, String> conflictCache = new HashMap<>();
+    private static long conflictStamp;
+
     private static String conflicts(KeyMapping key) {
+        long now = Clock.millis();
+        if (now - conflictStamp > 250) {
+            conflictCache.clear();
+            conflictStamp = now;
+        }
+        return conflictCache.computeIfAbsent(key, KeybindRows::computeConflicts);
+    }
+
+    private static String computeConflicts(KeyMapping key) {
         if (key.isUnbound()) return "Не назначена";
         var mc = Minecraft.getInstance();
         var matches = Arrays.stream(mc.options.keyMappings)
@@ -29,6 +45,7 @@ public final class KeybindRows {
     }
 
     static void assign(KeyMapping key, InputConstants.Key value) {
+        conflictCache.clear();
         key.setDown(false);
         while (key.consumeClick()) {}
         key.setKey(value);
