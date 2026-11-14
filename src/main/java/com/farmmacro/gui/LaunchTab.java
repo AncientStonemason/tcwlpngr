@@ -19,6 +19,7 @@ final class LaunchTab {
 
     void build() {
         MacroManager mm = MacroManager.INSTANCE;
+        s.rows.add(new Rows.Section("Источник").key("l.src"));
         s.rows.add(new Rows.Selector(
                         "Клавиша запуска играет",
                         MacroManager.keyName(FarmMacroMod.keyPlay) + " — запись по кадрам или маршрут по точкам",
