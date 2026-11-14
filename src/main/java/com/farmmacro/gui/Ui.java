@@ -410,6 +410,24 @@ public final class Ui {
         return f.plainSubstrByWidth(s, Math.max(0, maxW - ell)) + "…";
     }
 
+    /**
+     * Подпись кнопки по центру прямоугольника. Ведущий символ-значок («▶ Запустить», «⚙») рисуется иконкой Kaelix,
+     * а не глифом шрифта; остальной текст обрезается по ширине.
+     */
+    public static void label(GuiGraphicsExtractor g, Font f, String s, int x, int y, int w, int h, int color) {
+        Icon icon = Icon.leading(s);
+        if (icon == null) {
+            textCentered(g, f, ellipsize(f, s, w - 6), x + w / 2, y + (h - 8) / 2, color);
+            return;
+        }
+        String rest = Icon.stripGlyph(s);
+        int size = Math.clamp(Math.min(w, h) - 4, 8, 12), gap = rest.isEmpty() ? 0 : 4;
+        rest = ellipsize(f, rest, w - 6 - size - gap);
+        int ix = x + (w - size - gap - f.width(rest)) / 2;
+        icon.draw(g, ix, y + (h - size) / 2, size, color);
+        if (!rest.isEmpty()) text(g, f, rest, ix + size + gap, y + (h - 8) / 2, color);
+    }
+
     public static boolean inside(double mx, double my, int x, int y, int w, int h) {
         return mx >= x && my >= y && mx < x + w && my < y + h;
     }

@@ -1060,7 +1060,7 @@ public class PanicDetector {
 
         offer(world.tick(mc, p, c)); // v1.13: мир и сервер (состояние обновляется всегда)
         offer(players.tick(mc, p, c)); // v1.14: staff, двойник, массовый телепорт, без имени
-        if (!MacroManager.INSTANCE.isPlaying()) return; // Jacob's Contest: обычный стоп по лимиту
+        if (!armed()) return; // Jacob's Contest: обычный стоп по лимиту; рыбалка без макроса остаётся под охраной
 
         if (c.suspicionEnabled) {
             String s = suspicion.reasonIfOver(System.currentTimeMillis(), c.suspicionHalfLifeSec, c.suspicionLimit);
@@ -1139,7 +1139,7 @@ public class PanicDetector {
             AimAssist.INSTANCE.handoff("ручное наведение: контекст изменился");
             return;
         }
-        AutoFish.INSTANCE.stop("паника");
+        Guard.run("panic/fishing-stop", () -> AutoFish.INSTANCE.stop("паника"));
         combatEffect = CombatPanic.isCombatId(id);
         Guard.run("panic/handoff-notice", () -> PanicHandoff.show(id, reason));
         if (combatEffect) Guard.run("combat/aim-pause", () -> AimAssist.INSTANCE.pauseLocal("боевая паника"));

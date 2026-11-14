@@ -5,21 +5,19 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /** A settings entry, deliberately without a controller toggle or start action. */
 final class ModuleCardRow extends Rows.Row {
+    /** Плитка с иконкой слева и поле под стрелку справа. */
+    private static final int TILE = 28, TEXT_X = 42, ARROW_W = 22;
+
     private final ModuleCatalog.Module module;
     private final Runnable open;
     private final BooleanSupplier focused;
-    private final int icon;
+    private final Runnable hovered;
 
-    ModuleCardRow(ModuleCatalog.Module module, Runnable open, BooleanSupplier focused) {
+    ModuleCardRow(ModuleCatalog.Module module, Runnable open, BooleanSupplier focused, Runnable hovered) {
         this.module = module;
         this.open = open;
         this.focused = focused;
-        int index = ModuleCatalog.ALL.indexOf(module);
-        icon = module.title().startsWith("Рыбалка")
-                ? 19
-                : module.title().equals("Производительность")
-                        ? 18
-                        : index; // Dedicated authored rod glyph; retired schedule remains unused.
+        this.hovered = hovered;
     }
 
     @Override
@@ -34,43 +32,34 @@ final class ModuleCardRow extends Rows.Row {
 
     @Override
     void render(Rows.Ctx c, GuiGraphicsExtractor g, int x, int y, int w, int mx, int my, boolean hover) {
-        boolean focus = focused.getAsBoolean();
-        int yy = y + 4;
+        boolean focus = focused.getAsBoolean(), lit = hover || focus;
+        int yy = y + MenuLayout.CARD_GAP / 2, h = MenuLayout.CARD_HEIGHT - MenuLayout.CARD_GAP;
         Ui.roundBordered(
                 g,
                 x,
                 yy,
                 w,
-                MenuLayout.CARD_HEIGHT - 8,
-                7,
+                h,
+                6,
                 hover ? Ui.CARD_HOVER : Ui.CARD,
                 focus ? Ui.ACCENT : hover ? Ui.lerp(Ui.BORDER, Ui.SUB, .35f) : Ui.BORDER);
-        Ui.round(g, x + 12, yy + 12, 26, 26, 5, Ui.lerp(Ui.CARD, Ui.ACCENT, .08f));
-        ModuleGlyphs.draw(g, icon, x + 13, yy + 13, 24);
-        int tx = x + 48, available = Math.max(8, w - 72);
-        Ui.text(g, c.font(), Ui.ellipsize(c.font(), module.title(), available), tx, yy + 13, Ui.TEXT);
-        Ui.text(
-                g,
-                c.font(),
-                module.badge().equals("ALPHA") ? "ALPHA" : "Настройки",
-                tx,
-                yy + 27,
-                module.badge().equals("ALPHA") ? Ui.WARN : Ui.SUB);
-        Ui.text(g, c.font(), "›", x + w - 17, yy + 16, hover || focus ? Ui.ACCENT_HI : Ui.SUB);
-        String rest = module.description();
-        int width = w - 24;
-        String first = c.font().plainSubstrByWidth(rest, width);
-        if (first.length() < rest.length()) {
-            int space = first.lastIndexOf(' ');
-            if (space > 0) first = first.substring(0, space);
-        }
-        Ui.text(g, c.font(), first, x + 12, yy + 49, Ui.SUB);
-        rest = rest.substring(first.length()).strip();
-        if (!rest.isEmpty()) Ui.text(g, c.font(), Ui.ellipsize(c.font(), rest, width), x + 12, yy + 62, Ui.SUB);
+        int tile = yy + (h - TILE) / 2;
+        Ui.round(g, x + 6, tile, TILE, TILE, 6, Ui.lerp(Ui.CARD, Ui.ACCENT, lit ? .24f : .12f));
+        ModuleCatalog.icon(module)
+                .drawCentered(g, x + 6, tile, TILE, TILE, 18, lit ? Ui.ACCENT_HI : Ui.lerp(Ui.ACCENT_HI, Ui.TEXT, .3f));
+        int available = Math.max(8, w - TEXT_X - ARROW_W);
+        String title = Ui.ellipsize(c.font(), module.title(), available);
+        String description = Ui.ellipsize(c.font(), module.description(), available);
+        Ui.text(g, c.font(), title, x + TEXT_X, yy + h / 2 - 11, Ui.TEXT);
+        Ui.text(g, c.font(), description, x + TEXT_X, yy + h / 2 + 2, Ui.SUB);
+        Icon.CHEVRON_RIGHT.draw(g, x + w - 16, yy + (h - 10) / 2, 10, lit ? Ui.ACCENT_HI : Ui.DIM);
         if (hover) {
+            hovered.run();
             c.hand();
-            c.tooltip(module.title() + " — " + module.description() + " "
-                    + Tr.t("farmmacro.module.open_hint", "Открытие не запускает модуль."));
+            // Подсказка нужна только когда на карточке не поместился текст.
+            if (!title.equals(module.title()) || !description.equals(module.description()))
+                c.tooltip(module.title() + " — " + module.description() + " "
+                        + Tr.t("farmmacro.module.open_hint", "Открытие не запускает модуль."));
         }
     }
 

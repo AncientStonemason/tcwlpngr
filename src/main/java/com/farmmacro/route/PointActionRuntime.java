@@ -35,6 +35,7 @@ public final class PointActionRuntime {
             cancel();
             index = idx;
             a = point.pointAction.copy();
+            a.sanitize(); // файл правили руками: тип null и слот вне 0–9 недопустимы
             oldSlot = p.getInventory().getSelectedSlot();
             oldYaw = p.getYRot();
             oldPitch = p.getXRot();
