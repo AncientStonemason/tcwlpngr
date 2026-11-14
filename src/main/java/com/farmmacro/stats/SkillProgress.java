@@ -52,7 +52,7 @@ public final class SkillProgress {
         if (level < 0) return 0;
         double value = skill.total(level) + current, delta = 0;
         boolean continuous =
-                world == w && at != 0 && now >= at && now - at <= 15_000_000_000L && Double.isFinite(total);
+                world == w && observed && now - at >= 0 && now - at <= 15_000_000_000L && Double.isFinite(total);
         if (continuous && value < total) return 0;
         if (continuous && value - total <= 100000) {
             delta = value - total;
@@ -79,7 +79,7 @@ public final class SkillProgress {
     }
 
     public boolean fresh(Object w, long now) {
-        return world == w && at != 0 && now >= at && now - at < 60_000_000_000L;
+        return world == w && observed && now - at >= 0 && now - at < 60_000_000_000L;
     }
 
     public long lastAt() {

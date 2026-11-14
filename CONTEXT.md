@@ -10,7 +10,7 @@
 - Паника = стоп + красный экран + звук (по настройке — вывод окна вперёд, скриншот/Discord). Без автоответов в чат, автоповоротов камеры и автопродолжения: после паники — только новый ручной запуск. Мягкие Farm-события — короткая ограниченная задержка, Combat/критические — сразу. «Человеческая реакция», расписание, автореконнект, Pests/Visitors/Stash/Loadouts удалены (2.0.2); не возвращать.
 
 ## 2. Стек
-Minecraft **26.1.2** (официальные имена Mojang, игра не обфусцирована) · `net.fabricmc.fabric-loom` 1.18.3 (без remap, `implementation`) · Loader 0.19.5 · Fabric API 0.155.3+26.1.2 · Gradle 9.7.1 · Java 25 · mod_version 2.0.1.
+Minecraft **26.1.2** (официальные имена Mojang, игра не обфусцирована) · `net.fabricmc.fabric-loom` 1.18.3 (без remap, `implementation`) · Loader 0.19.5 · Fabric API 0.155.3+26.1.2 · Gradle 9.7.1 · Java 25 · mod_version 2.2.0.
 
 ## 3. Архитектура (`src/main/java/com/farmmacro`)
 | Файл | Роль |
@@ -153,6 +153,13 @@ Minecraft **26.1.2** (официальные имена Mojang, игра не о
 ## 6. Журнал
 
 Новые записи — сверху этого раздела (что / зачем / как проверено / что осталось). Записи до 2.0.1 включительно перенесены в [`docs/history/CONTEXT-JOURNAL.md`](docs/history/CONTEXT-JOURNAL.md); они описывают старое поведение и не являются правилами.
+
+### 2.2.0 — аудит кода, новое меню модулей, значки интерфейса
+- **Что:** полный аудит (меню, HUD, маршруты, макрос, конфиг, утилиты, миксины, камера/Combat/визуал, сборка и ресурсы) и исправления — список в `CHANGELOG.md` [2.2.0]. Новое: `gui/UiIcons` + атлас `textures/gui/icons.png` (32 значка 16×16, генерирует `tools/gen_ui_icons.py`; порядок ячеек = константы `UiIcons`), каталог модулей сеткой (`MenuLayout`: карточка 52, колонки 1/2/3 от ширины 300/720; настройки в две колонки — `SETTINGS_TWO_COLUMNS_MIN`), значок модуля — поле `ModuleCatalog.Module.icon`, `Rows.Btn.icon(...)`, `macro/FileNames` (безопасные имена файлов), `ConfigProfiles.codeTree()`.
+- **Сборка:** `main` падал на `checkRemovedFiles` — веб-загрузка вернула 38 удалённых файлов. Удалены они и всё из `REMOVED-FILES.txt`; лишний `src/main/resources/icon.png`.
+- **Не менялось:** пороги, задержки и реакции паники, Humanizer, BanwaveWatch, HandDelays, результаты наведения и выбора цели, логика маршрутов/Motion/AutoFish. Пакет `panic/` и его экраны не правились.
+- **Как проверено:** `spotlessApply build compileStressJava` (Error Prone/NullAway, JUnit, включая новые `MenuLayoutTest`, `FileNamesTest`, `PathFinderKeyTest`, `ConfigProfilesTest`), `runClientGameTest` под Xvfb — скриншоты всех экранов при 854×480. Hypixel/сеть/Discord/звук, `routeStress` и широкая раскладка меню в игре не проверялись.
+- **Что осталось:** ленивый снимок отмены при открытии правки точки (нужен метод в `RouteBuffer`); два разных имени макроса могут дать один файл («a b» и «a_b»); `ManualTargets` каждый тик пересканирует окружение; try/catch в `PanicPacketMixin`; ≈2,8 тыс. русских строк меню ещё не в lang; неиспользуемые `farming-xp.json`, `sale-products.json`, `visitor-products.json`, `motion/aether/*.json` в ресурсах.
 
 ### 2.1.0 — надёжность, инструменты проверки, история запусков
 - **Что:** JUnit 6 + JaCoCo, Error Prone + NullAway, Spotless/palantir (весь код переформатирован, FQN → импорты), клиентские game-тесты Fabric (`src/gametest`), CI build/gametest/release (actions по SHA, Renovate), `verifyReleaseVersion`. Новое: `Clock` (монотонные интервалы вместо `currentTimeMillis`, кроме паники/HandDelays/усталости/сохраняемых отметок), `StepProfiler`, `IoWorker` (асинхронный `ModConfig.save`, `flush` при выходе), `ConfigMigrator` (`schemaVersion`=1), `MacroStates`, `SessionHistory` + раздел «История запусков», `RouteCode` + повтор в `RouteBuffer`, `BugReport`, `MixinAudit`, `Tr` + ключи модулей в lang, Discord-события `webhookOnPanic`/`webhookOnSessionEnd` и повтор только при ошибке соединения. `FarmMacroScreen` разделён (`PanicTab`/`LaunchTab`/`VisualTab`). PNG пережаты без потерь.

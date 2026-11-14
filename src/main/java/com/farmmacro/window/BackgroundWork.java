@@ -54,5 +54,11 @@ public final class BackgroundWork {
         }
     }
 
+    /** Puts the player's own option back (client stop / disconnect) so it never persists as false. */
+    public static void restore(Minecraft mc) {
+        if (savedPause != null && mc != null && mc.options != null) mc.options.pauseOnLostFocus = savedPause;
+        savedPause = null;
+    }
+
     private BackgroundWork() {}
 }
