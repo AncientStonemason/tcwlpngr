@@ -157,6 +157,8 @@ public final class ConfigProfiles {
             "perfSavedEntityDist",
             "uiAdvanced",
             "uiSections",
+            "favouriteModules",
+            "recentModules",
             "keyPlay",
             "keyOpenGui",
             "lastSeenVersion",
@@ -253,6 +255,8 @@ public final class ConfigProfiles {
         loaded.schemaVersion = ConfigMigrator.CURRENT;
         loaded.uiAdvanced = cur.uiAdvanced;
         loaded.uiSections = cur.uiSections; // вид меню — не часть профиля
+        loaded.favouriteModules = cur.favouriteModules;
+        loaded.recentModules = cur.recentModules;
         loaded.lastSeenVersion = cur.lastSeenVersion; // v1.16.2 «Что нового» — не часть профиля
         loaded.keyPlay = cur.keyPlay;
         loaded.keyOpenGui = cur.keyOpenGui;
@@ -518,5 +522,99 @@ public final class ConfigProfiles {
         c.sanitize();
         ModConfig.save();
         LOGGER.info("Готовый набор «{}» применён: {}", id, c.describeThresholds());
+    }
+
+    /** Одно поле набора «Удобный вид»: имя поля {@link ModConfig}, значение и короткая подпись для подсказки. */
+    public record ComfortEntry(String field, Object value, String label) {}
+
+    /** Группа полей набора «Удобный вид» (заголовок для подсказки). */
+    public record ComfortGroup(String title, List<ComfortEntry> entries) {}
+
+    /**
+     * Набор «Удобный вид»: только интерфейс, HUD, визуал маршрута и режим производительности. Не трогает детекторы,
+     * панику, случайность, задержки, наведение, повороты камеры и автоматизацию. Значения подобраны для читаемости
+     * и при 854×480, и при 1920×1080: умеренная прозрачность, подсказки под подписями, HUD без лишнего масштаба.
+     */
+    public static final List<ComfortGroup> COMFORT = List.of(
+            new ComfortGroup(
+                    "Меню",
+                    List.of(
+                            new ComfortEntry("uiTheme", "quiet", "тема «Чёрный + синий»"),
+                            new ComfortEntry("uiBackgroundOpacity", 92, "фон 92%"),
+                            new ComfortEntry("uiCornerScale", 0.35, "скругление 0,35"),
+                            new ComfortEntry("uiSoftShadows", false, "без мягких теней"),
+                            new ComfortEntry("uiHints", true, "подсказки под подписями"),
+                            new ComfortEntry("uiFollowGameLanguage", true, "язык по языку игры"),
+                            new ComfortEntry("guiOffsetX", 0, "окно по центру"),
+                            new ComfortEntry("guiOffsetY", 0, "окно по центру"))),
+            new ComfortGroup(
+                    "HUD",
+                    List.of(
+                            new ComfortEntry("hudStyle", "KAELIX", "стиль Kaelix"),
+                            new ComfortEntry("hudScale", 1.0, "масштаб 1,0"),
+                            new ComfortEntry("hudWidth", 190, "ширина 190"),
+                            new ComfortEntry("hudBackgroundOpacity", 80, "фон 80%"),
+                            new ComfortEntry("hudWrap", true, "перенос длинного текста"),
+                            new ComfortEntry("hudPanicMinutes", 30, "последняя паника 30 мин"))),
+            new ComfortGroup(
+                    "Маршрут",
+                    List.of(
+                            new ComfortEntry("routeEnabled", true, "показывать"),
+                            new ComfortEntry("routeMode", "always", "всегда"),
+                            new ComfortEntry("routeSeeThrough", "dim", "сквозь блоки приглушённо"),
+                            new ComfortEntry("routeWidth", 0.1, "толщина 0,1"),
+                            new ComfortEntry("routeRadius", 48, "радиус 48"),
+                            new ComfortEntry("routeArrows", true, "стрелки"),
+                            new ComfortEntry("routeArrowSpacing", 4.0, "шаг стрелок 4"),
+                            new ComfortEntry("routeShowActions", true, "отметки действий"),
+                            new ComfortEntry("routeOpacity", 85, "непрозрачность 85%"),
+                            new ComfortEntry("routeGlow", true, "свечение"))),
+            new ComfortGroup(
+                    "Производительность (только показ)",
+                    List.of(
+                            new ComfortEntry("perfFps", 30, "лимит 30 FPS"),
+                            new ComfortEntry("perfBlockParticles", false, "частицы не блокировать"),
+                            new ComfortEntry("perfBackgroundFps", 0, "без отдельного лимита в фоне"),
+                            new ComfortEntry("perfChunks", 0, "дальность не урезать"),
+                            new ComfortEntry("perfWorldVolume", 100, "звук мира 100%"))));
+
+    /** Имена всех полей, которые меняет {@link #applyComfort(ModConfig)}. */
+    public static Set<String> comfortFields() {
+        Set<String> out = new java.util.LinkedHashSet<>();
+        for (ComfortGroup g : COMFORT) for (ComfortEntry e : g.entries()) out.add(e.field());
+        return out;
+    }
+
+    /** Подсказка кнопки: по строке на группу со всеми значениями. */
+    public static String comfortSummary() {
+        StringBuilder sb = new StringBuilder();
+        for (ComfortGroup g : COMFORT) {
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(g.title()).append(": ");
+            List<String> labels = new ArrayList<>();
+            for (ComfortEntry e : g.entries()) if (!labels.contains(e.label())) labels.add(e.label());
+            sb.append(String.join(", ", labels));
+        }
+        return sb.toString();
+    }
+
+    /** Записать значения набора «Удобный вид» в {@code c} (без сохранения). */
+    public static void applyComfort(ModConfig c) {
+        for (ComfortGroup g : COMFORT)
+            for (ComfortEntry e : g.entries()) {
+                try {
+                    ModConfig.class.getField(e.field()).set(c, e.value());
+                } catch (ReflectiveOperationException ex) {
+                    throw new IllegalStateException("Поле набора «Удобный вид»: " + e.field(), ex);
+                }
+            }
+        c.sanitize();
+    }
+
+    /** Применить «Удобный вид» к текущим настройкам и сохранить. */
+    public static void applyComfort() {
+        applyComfort(ModConfig.INSTANCE);
+        ModConfig.save();
+        LOGGER.info("Набор «Удобный вид» применён: интерфейс, HUD, маршрут, показ режима производительности");
     }
 }

@@ -60,6 +60,8 @@ public final class Rows {
     public static BooleanSupplier advanced = () -> ModConfig.INSTANCE.uiAdvanced;
     /** Идёт поиск: видно всё найденное, без учёта режима и свёрнутых разделов. */
     public static boolean searching;
+    /** Фильтр «только изменённые»: видны лишь строки, отличающиеся от нормы; разделы раскрыты, тонкие настройки видны. */
+    public static boolean changedOnly;
 
     /** Привязать строки к разделам (строка → ближайший Section выше). Вызывать после сборки списка. */
     public static void link(List<Row> rows) {
@@ -132,11 +134,21 @@ public final class Rows {
             return adv;
         }
 
+        /** Условия самой строки без раздела: видимость, расширенный режим, фильтр «только изменённые». */
+        boolean ownShown() {
+            return visible.getAsBoolean()
+                    && (!adv || advanced.getAsBoolean() || changedOnly)
+                    && (!changedOnly || passesChangedFilter());
+        }
+
+        /** Остаётся ли строка при фильтре «только изменённые» (по умолчанию — нет, кроме строк с изменённым значением). */
+        boolean passesChangedFilter() {
+            return false;
+        }
+
         /** Видна ли сама строка (без учёта свёрнутого раздела). */
         boolean selfShown() {
-            return visible.getAsBoolean()
-                    && (!adv || advanced.getAsBoolean())
-                    && (section == null || section.selfShown());
+            return ownShown() && (section == null || section.selfShown());
         }
 
         public boolean shown() {
@@ -213,6 +225,7 @@ public final class Rows {
         }
 
         public boolean open() {
+            if (changedOnly) return true;
             if (localExpansion != null) return localExpansion;
             if (!collapsible()) return true;
             Boolean v = ModConfig.INSTANCE.uiSections.get(key);
@@ -229,14 +242,35 @@ public final class Rows {
         }
 
         @Override
+        boolean passesChangedFilter() {
+            return true;
+        }
+
+        @Override
         boolean selfShown() {
-            if (!visible.getAsBoolean() || (adv && !advanced.getAsBoolean())) return false;
-            if (children.isEmpty()) return true;
-            for (Row r : children)
-                if (r.visible.getAsBoolean()
-                        && (!r.adv || advanced.getAsBoolean())
-                        && !(r instanceof Note n && n.empty())) return true;
+            if (!ownShown()) return false;
+            if (children.isEmpty()) return !changedOnly;
+            for (Row r : children) if (r.ownShown() && !(r instanceof Note n && n.empty())) return true;
             return false;
+        }
+
+        /** Строки раздела, которые сейчас видны и отличаются от нормы (их сбрасывает кнопка раздела). */
+        List<Labeled> changedChildren() {
+            List<Labeled> out = new ArrayList<>();
+            for (Row r : children) if (r instanceof Labeled l && l.changed() && l.ownShown()) out.add(l);
+            return out;
+        }
+
+        private static Section armed;
+        private static long armedUntil;
+        private static final int ARM_MS = 3000;
+
+        private boolean armed() {
+            return armed == this && Clock.millis() < armedUntil;
+        }
+
+        private boolean overReset(double mx, double my) {
+            return my >= lastY + 4 && my < lastY + 20 && mx >= lastX + lastW - 16 && mx < lastX + lastW;
         }
 
         @Override

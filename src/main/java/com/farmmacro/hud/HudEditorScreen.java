@@ -2,24 +2,30 @@ package com.farmmacro.hud;
 
 import com.farmmacro.config.HudSlot;
 import com.farmmacro.config.ModConfig;
-import com.farmmacro.gui.FlatButton;
 import com.farmmacro.gui.Ui;
+import com.farmmacro.gui.UiIcons;
 import com.farmmacro.util.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
-/** Floating editor chrome: no permanently blocked top/bottom HUD regions. H hides chrome. */
+/**
+ * HUD editor: slim collapsible toolbar at the bottom centre, a one-line hint, snapping guides and a readout for the
+ * selected block. H collapses the toolbar; nothing else reserves screen space.
+ */
 public class HudEditorScreen extends Screen {
+    private static final int BTN = 16, PAD = 2, BTN_GAP = 2, GROUP_GAP = 5, BAR_MARGIN = 4;
+
     private final Screen parent;
     private List<FarmHud.Rect> rects = List.of();
-    private final List<FlatButton> buttons = new ArrayList<>();
-    private String selectedId = "inventory", dragId, panelDrag;
+    private final List<ToolButton> buttons = new ArrayList<>();
+    private String selectedId = "inventory", dragId;
     private double grabDx,
             grabDy,
             dragX,
@@ -31,10 +37,37 @@ public class HudEditorScreen extends Screen {
             initialScale,
             panelGrabX,
             panelGrabY;
-    private boolean resizing, showList, chromeHidden;
-    private int listScroll, dockW, dockH, dockX, dockY, infoX, infoY, listX, listY;
+    private double guideX = Double.NaN, guideY = Double.NaN;
+    private boolean resizing, showList, chromeHidden, listDrag;
+    private int listScroll, listX, listY, barX, barY, barW, barH;
     private long resetAllUntil;
-    private FlatButton listBtn, snapBtn, gridBtn, mergeBtn, hideBtn, resetBtn, allBtn, alwaysBtn;
+    private ToolButton listBtn, snapBtn, gridBtn, mergeBtn, hideBtn, resetBtn, allBtn, alwaysBtn, collapseBtn;
+
+    /** Icon-only toggle button with Kaelix styling. */
+    private static final class ToolButton extends Button {
+        private final int icon;
+        boolean on;
+        int tint;
+        boolean primary;
+
+        ToolButton(int icon, Runnable action) {
+            super(0, 0, BTN, BTN, Component.empty(), button -> action.run(), DEFAULT_NARRATION);
+            this.icon = icon;
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor g, int mx, int my, float delta) {
+            boolean lit = active && isHoveredOrFocused();
+            int fill = primary
+                    ? Ui.alpha(Ui.ACCENT, lit ? .55f : .38f)
+                    : on ? Ui.alpha(Ui.ACCENT, lit ? .38f : .26f) : lit ? Ui.CARD_HOVER : Ui.CARD;
+            int border = active && (on || primary || isFocused()) ? Ui.ACCENT : Ui.BORDER;
+            Ui.roundBordered(g, getX(), getY(), getWidth(), getHeight(), 4, fill, border);
+            int size = Math.min(12, Math.min(getWidth(), getHeight()) - 4);
+            int color = !active ? Ui.DIM : tint != 0 ? tint : on || primary ? Ui.ACCENT_HI : Ui.TEXT;
+            UiIcons.draw(g, icon, getX() + (getWidth() - size) / 2, getY() + (getHeight() - size) / 2, size, color);
+        }
+    }
 
     public HudEditorScreen(Screen parent) {
         super(Component.literal("Редактор HUD"));
@@ -43,14 +76,6 @@ public class HudEditorScreen extends Screen {
 
     private ModConfig cfg() {
         return ModConfig.INSTANCE;
-    }
-
-    private String yes(boolean value) {
-        return value ? "вкл" : "выкл";
-    }
-
-    private int infoW() {
-        return Math.min(360, Math.max(80, width - 16));
     }
 
     private int listW() {
@@ -69,48 +94,37 @@ public class HudEditorScreen extends Screen {
         return Math.clamp(y, 0, Math.max(0, height - h));
     }
 
-    private FlatButton add(String text, String tip, Runnable action) {
-        var b = new FlatButton(0, 0, 20, 20, text, button -> action.run());
-        b.setTooltip(Tooltip.create(Component.literal(tip)));
+    private ToolButton add(int icon, Runnable action) {
+        var b = new ToolButton(icon, action);
         buttons.add(b);
-        return addRenderableWidget(b);
+        addRenderableWidget(b);
+        return b;
     }
 
     @Override
     protected void init() {
         buttons.clear();
-        dockW = Math.min(360, Math.max(80, width - 16));
-        int cols = dockW >= 280 ? 3 : 2;
-        dockH = 22 + ((10 + cols - 1) / cols) * 23;
-        dockX = boundX(cfg().hudEditorDockX < 0 ? width - dockW - 8 : cfg().hudEditorDockX, dockW);
-        dockY = boundY(cfg().hudEditorDockY < 0 ? height - dockH - 8 : cfg().hudEditorDockY, dockH);
-        infoX = boundX(cfg().hudEditorInfoX, infoW());
-        infoY = boundY(cfg().hudEditorInfoY, 48);
-        listX = boundX(cfg().hudEditorListX, listW());
-        listY = boundY(cfg().hudEditorListY, listH());
-        listBtn = add("Плашки", "Список скрытых/пустых. Перетащи список за заголовок", () -> {
-            showList = !showList;
-            dragId = null;
-        });
-        snapBtn =
-                add("Snap", "Прилипание к сетке8px, краям и центру", () -> cfg().hudEditorSnap = !cfg().hudEditorSnap);
-        gridBtn = add("Сетка", "Сетка8px; отдельно от прилипания", () -> cfg().hudEditorGrid = !cfg().hudEditorGrid);
-        mergeBtn = add("Общая плашка", "Индивидуальные места сохраняются", () -> {
+        listX = boundX(cfg().hudEditorListX < 0 ? (width - listW()) / 2 : cfg().hudEditorListX, listW());
+        listY = boundY(cfg().hudEditorListY < 0 ? height - 30 - listH() : cfg().hudEditorListY, listH());
+        gridBtn = add(UiIcons.GRID, () -> cfg().hudEditorGrid = !cfg().hudEditorGrid);
+        snapBtn = add(UiIcons.PIN, () -> cfg().hudEditorSnap = !cfg().hudEditorSnap);
+        mergeBtn = add(UiIcons.COPY, () -> {
             cfg().hudMerged = !cfg().hudMerged;
             dragId = null;
         });
-        hideBtn = add(
-                "Скрыть / показать",
-                "Для инвентаря также включает отображение; не включает автоматику",
-                this::toggleHidden);
-        alwaysBtn = add("Показ: по ситуации", "Всегда: виджет виден и без активной задачи. Не запускает модуль", () -> {
+        listBtn = add(UiIcons.FOLDER, () -> {
+            showList = !showList;
+            dragId = null;
+        });
+        hideBtn = add(UiIcons.EYE, this::toggleHidden);
+        alwaysBtn = add(UiIcons.STAR, () -> {
             if (selectedId.equals("all")) return;
             var s = slot(selectedId);
             s.always = !s.always;
             s.hidden = false;
             if (s.always && selectedId.equals("inventory")) cfg().hudInventory = true;
         });
-        resetBtn = add("Сброс выбранной", "Только её место/размер/личные цвета. В общей панели — геометрия all", () -> {
+        resetBtn = add(UiIcons.UNDO, () -> {
             String id = selectedScaleId();
             var old = slot(id);
             var fresh = new HudSlot();
@@ -119,7 +133,7 @@ public class HudEditorScreen extends Screen {
             cfg().hudSlots.put(id, fresh);
             dragId = null;
         });
-        allBtn = add("Сброс всех", "Повторное нажатие в течение3секунд; иначе сброса нет", () -> {
+        allBtn = add(UiIcons.TRASH, () -> {
             long now = Clock.millis();
             if (now >= resetAllUntil) {
                 resetAllUntil = now + 3_000L;
@@ -129,29 +143,49 @@ public class HudEditorScreen extends Screen {
             resetAllUntil = 0;
             dragId = null;
         });
-        add("Готово", "Сохранить и вернуться; Esc тоже сохраняет", this::onClose);
-        add(
-                "Скрыть панели · H",
-                "Убрать все панели редактора для доступа к любому месту. H возвращает",
-                this::toggleChrome);
+        var done = add(UiIcons.CHECK, this::onClose);
+        done.primary = true;
+        done.setTooltip(Tooltip.create(Component.literal("Готово — сохранить и вернуться (Esc)")));
+        collapseBtn = add(UiIcons.CHEVRON_DOWN, this::toggleChrome);
         positionButtons();
     }
 
+    /** Toolbar geometry: groups of 3 · 3 · 2 · 2 buttons; shrinks buttons on very narrow screens. */
     private void positionButtons() {
-        int cols = dockW >= 280 ? 3 : 2, bw = (dockW - 12 - (cols - 1) * 4) / cols;
-        for (int i = 0; i < buttons.size(); i++) {
+        int n = buttons.size(), size = BTN;
+        int fixed = PAD * 2 + 6 * BTN_GAP + 3 * GROUP_GAP;
+        if (fixed + n * size > width - 8) size = Math.max(10, (width - 8 - fixed) / n);
+        barW = chromeHidden ? size + PAD * 2 : fixed + n * size;
+        barH = size + PAD * 2;
+        barX = (width - barW) / 2;
+        barY = height - barH - BAR_MARGIN;
+        int x = barX + PAD;
+        int[] groupEnd = {3, 6, 8, 10};
+        int group = 0;
+        for (int i = 0; i < n; i++) {
             var b = buttons.get(i);
-            b.setX(dockX + 6 + i % cols * (bw + 4));
-            b.setY(dockY + 17 + i / cols * 23);
-            b.setWidth(bw);
-            b.visible = !chromeHidden;
+            boolean isCollapse = b == collapseBtn;
+            b.visible = !chromeHidden || isCollapse;
+            b.setWidth(size);
+            b.setHeight(size);
+            b.setY(barY + PAD);
+            if (chromeHidden) {
+                b.setX(isCollapse ? barX + PAD : barX);
+                continue;
+            }
+            b.setX(x);
+            x += size + BTN_GAP;
+            if (i + 1 == groupEnd[group]) {
+                x += GROUP_GAP - BTN_GAP;
+                group++;
+            }
         }
     }
 
     private void toggleChrome() {
         chromeHidden = !chromeHidden;
-        panelDrag = null;
         dragId = null;
+        listDrag = false;
         positionButtons();
         setFocused(null);
     }
@@ -173,62 +207,121 @@ public class HudEditorScreen extends Screen {
         }
     }
 
+    private static Tooltip tip(String text) {
+        return Tooltip.create(Component.literal(text));
+    }
+
+    private static String state(boolean value) {
+        return value ? " — вкл" : " — выкл";
+    }
+
+    private void refreshButtons() {
+        boolean chosen = rect(selectedId) != null, single = chosen && !selectedId.equals("all");
+        var sl = cfg().hudSlots.get(selectedId);
+        gridBtn.on = cfg().hudEditorGrid;
+        gridBtn.setTooltip(tip("Сетка 8 px" + state(gridBtn.on) + ". Отдельно от прилипания"));
+        snapBtn.on = cfg().hudEditorSnap;
+        snapBtn.setTooltip(tip("Прилипание" + state(snapBtn.on) + ": сетка 8 px, края, центр и соседние плашки"));
+        mergeBtn.on = cfg().hudMerged;
+        mergeBtn.setTooltip(tip("Общая плашка" + state(mergeBtn.on) + ". Индивидуальные места сохраняются"));
+        listBtn.on = showList;
+        listBtn.setTooltip(tip("Список плашек" + state(showList) + ": скрытые и пустые, перетащи за заголовок"));
+        hideBtn.active = single;
+        hideBtn.on = sl != null && sl.hidden;
+        hideBtn.setTooltip(tip(
+                selectedId.equals("inventory") && !cfg().hudInventory
+                        ? "Включить инвентарь (ПКМ по плашке тоже)"
+                        : "Скрыть / показать выбранную (ПКМ по плашке)"));
+        alwaysBtn.active = single;
+        alwaysBtn.on = FarmHud.pinned(selectedId);
+        alwaysBtn.setTooltip(tip(
+                alwaysBtn.on
+                        ? "Показ: всегда. Плашка видна и без задачи"
+                        : "Показ: по ситуации. Нажми, чтобы показывать всегда (модуль не запускается)"));
+        resetBtn.active = chosen;
+        resetBtn.setTooltip(tip("Сброс выбранной: место, размер и личные цвета"));
+        boolean pending = Clock.millis() < resetAllUntil;
+        allBtn.tint = pending ? Ui.DANGER : 0;
+        allBtn.on = pending;
+        allBtn.setTooltip(
+                tip(pending ? "Нажми ещё раз — сбросить ВСЕ плашки" : "Сброс всех: нажми дважды за 3 секунды"));
+        collapseBtn.setTooltip(tip(chromeHidden ? "Показать панель (H)" : "Свернуть панель (H)"));
+        collapseBtn.tint = 0;
+    }
+
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
-        listBtn.setMessage(Component.literal("Плашки: " + yes(showList)));
-        snapBtn.setMessage(Component.literal("Snap: " + yes(cfg().hudEditorSnap)));
-        gridBtn.setMessage(Component.literal("Сетка: " + yes(cfg().hudEditorGrid)));
-        mergeBtn.setMessage(Component.literal("Общая: " + yes(cfg().hudMerged)));
-        allBtn.setMessage(Component.literal(Clock.millis() < resetAllUntil ? "Сбросить ВСЁ?" : "Сброс всех"));
-        hideBtn.active = rect(selectedId) != null && !selectedId.equals("all");
-        resetBtn.active = rect(selectedId) != null;
-        hideBtn.setMessage(Component.literal(
-                selectedId.equals("inventory") && !cfg().hudInventory ? "Включить инвентарь" : "Скрыть / показать"));
-        alwaysBtn.active = rect(selectedId) != null && !selectedId.equals("all");
-        alwaysBtn.setMessage(Component.literal(FarmHud.pinned(selectedId) ? "Показ: всегда" : "Показ: по ситуации"));
-        for (var r : rects) {
-            if (r.id().equals(selectedId) || r.id().equals(dragId)) outline(g, r, Ui.ACCENT_HI);
-            else if (r.contains(mx, my) && !overChrome(mx, my)) outline(g, r, 0x80ffffff);
-        }
+        refreshButtons();
         g.nextStratum();
-        if (chromeHidden) {
-            // Only a tiny non-interactive hint; it never reserves a click region.
-            Ui.text(g, font, "H — панели · Esc — готово", 6, height - 12, Ui.TEXT);
-            return;
+        for (var r : rects) {
+            if (r.id().equals(selectedId) || r.id().equals(dragId)) continue;
+            if (r.contains(mx, my) && !overChrome(mx, my)) outline(g, r, 0x80ffffff);
         }
-        Ui.roundBordered(g, infoX, infoY, infoW(), 48, 5, Ui.TOOLTIP, Ui.BORDER);
-        Ui.text(
-                g,
-                font,
-                Ui.ellipsize(font, "HUD · тащи эту панель за заголовок · H скрыть", infoW() - 16),
-                infoX + 8,
-                infoY + 6,
-                Ui.TEXT);
-        Ui.text(
-                g,
-                font,
-                Ui.ellipsize(font, "ЛКМ перенос · Ctrl+drag / колесо размер · C в центр", infoW() - 16),
-                infoX + 8,
-                infoY + 20,
-                Ui.SUB);
+        drawGuides(g);
         var chosen = rect(selectedId);
-        var sl = cfg().hudSlots.get(selectedScaleId());
-        String info = chosen == null
-                ? "Плашки → выбери элемент"
-                : chosen.label() + " · " + Math.round((sl == null ? 1 : sl.scale) * 100) + "%"
-                        + (chosen.hidden() ? " · скрыта" : "");
-        if (selectedId.equals("inventory") && !cfg().hudInventory) info += " · предпросмотр, включи кнопкой";
-        Ui.text(g, font, Ui.ellipsize(font, info, infoW() - 16), infoX + 8, infoY + 34, Ui.SUB);
-        if (showList) drawList(g);
-        Ui.roundBordered(g, dockX, dockY, dockW, dockH, 5, Ui.TOOLTIP, Ui.BORDER);
-        Ui.text(
-                g,
-                font,
-                Ui.ellipsize(font, "Инструменты · перетащи заголовок · H скрыть", dockW - 16),
-                dockX + 8,
-                dockY + 5,
-                Ui.SUB);
+        if (chosen != null) {
+            outline(g, chosen, Ui.ACCENT_HI);
+            g.fill(
+                    chosen.x() - 2,
+                    chosen.y() - 2,
+                    chosen.x() + chosen.w() + 2,
+                    chosen.y() - 1,
+                    Ui.alpha(Ui.ACCENT, .4f));
+            g.fill(
+                    chosen.x() - 2,
+                    chosen.y() + chosen.h() + 1,
+                    chosen.x() + chosen.w() + 2,
+                    chosen.y() + chosen.h() + 2,
+                    Ui.alpha(Ui.ACCENT, .4f));
+            drawReadout(g, chosen);
+        }
+        drawHint(g);
+        if (showList && !chromeHidden) drawList(g);
+        Ui.roundBordered(g, barX, barY, barW, barH, 5, Ui.alpha(Ui.TOOLTIP, .94f), Ui.BORDER);
         super.extractRenderState(g, mx, my, delta);
+    }
+
+    private void drawGuides(GuiGraphicsExtractor g) {
+        int color = Ui.alpha(Ui.ACCENT_HI, .85f);
+        if (!Double.isNaN(guideX)) g.fill((int) Math.round(guideX), 0, (int) Math.round(guideX) + 1, height, color);
+        if (!Double.isNaN(guideY)) g.fill(0, (int) Math.round(guideY), width, (int) Math.round(guideY) + 1, color);
+    }
+
+    private void drawReadout(GuiGraphicsExtractor g, FarmHud.Rect chosen) {
+        var whole = rect(selectedScaleId());
+        var sl = cfg().hudSlots.get(selectedScaleId());
+        int px = whole == null ? chosen.x() : whole.x(), py = whole == null ? chosen.y() : whole.y();
+        String text = chosen.label() + " · " + px + "," + py + " · " + Math.round((sl == null ? 1 : sl.scale) * 100)
+                + "%" + (chosen.hidden() ? " · скрыта" : "");
+        if (selectedId.equals("inventory") && !cfg().hudInventory) text += " · предпросмотр";
+        text = Ui.ellipsize(font, text, width - 16);
+        int w = font.width(text) + 10, h = 13;
+        int x = Math.clamp(chosen.x(), 2, Math.max(2, width - w - 2));
+        int y = chosen.y() - h - 3 >= 0 ? chosen.y() - h - 3 : Math.min(height - h - 2, chosen.y() + chosen.h() + 3);
+        Ui.roundBordered(g, x, y, w, h, 4, Ui.alpha(Ui.TOOLTIP, .96f), Ui.ACCENT);
+        Ui.text(g, font, text, x + 5, y + 3, Ui.TEXT);
+    }
+
+    private void drawHint(GuiGraphicsExtractor g) {
+        boolean pending = Clock.millis() < resetAllUntil;
+        String[] variants = pending
+                ? new String[] {"Нажми «Сброс всех» ещё раз за 3 с — иначе ничего не сбросится"}
+                : new String[] {
+                    "ЛКМ — перенос · Ctrl+drag / колесо — размер · стрелки — 1 px (Shift — 10) · C — центр · H — панель",
+                    "ЛКМ — перенос · колесо — размер · стрелки — сдвиг · H — панель",
+                    "ЛКМ — перенос · колесо — размер · H — панель",
+                    "H — панель · Esc — готово"
+                };
+        String text = variants[variants.length - 1];
+        for (String v : variants)
+            if (font.width(v) <= width - 24) {
+                text = v;
+                break;
+            }
+        text = Ui.ellipsize(font, text, width - 16);
+        int w = font.width(text) + 12, x = (width - w) / 2;
+        Ui.roundBordered(g, x, 3, w, 13, 6, Ui.alpha(Ui.TOOLTIP, .85f), pending ? Ui.DANGER : Ui.BORDER);
+        Ui.text(g, font, text, x + 6, 6, pending ? Ui.WARN : Ui.SUB);
     }
 
     private static void outline(GuiGraphicsExtractor g, FarmHud.Rect r, int color) {
@@ -243,11 +336,12 @@ public class HudEditorScreen extends Screen {
         return !chromeHidden && showList && Ui.inside(x, y, listX, listY, listW(), listH());
     }
 
+    private boolean overBar(double x, double y) {
+        return Ui.inside(x, y, barX, barY, barW, barH);
+    }
+
     private boolean overChrome(double x, double y) {
-        return !chromeHidden
-                && (overList(x, y)
-                        || Ui.inside(x, y, dockX, dockY, dockW, dockH)
-                        || Ui.inside(x, y, infoX, infoY, infoW(), 48));
+        return overBar(x, y) || overList(x, y);
     }
 
     private List<FarmHud.Rect> listRects() {
@@ -274,7 +368,7 @@ public class HudEditorScreen extends Screen {
             if (r.id().equals(selectedId)) Ui.round(g, listX + 4, y, listW() - 8, 20, 3, Ui.alpha(Ui.ACCENT, .18f));
             boolean off = r.hidden() || r.id().equals("inventory") && !cfg().hudInventory;
             Ui.text(g, font, Ui.ellipsize(font, r.label(), listW() - 42), listX + 9, y + 6, off ? Ui.SUB : Ui.TEXT);
-            Ui.text(g, font, off ? "−" : "+", listX + listW() - 20, y + 6, off ? Ui.WARN : Ui.ON);
+            UiIcons.draw(g, UiIcons.EYE, listX + listW() - 21, y + 4, 12, off ? Ui.WARN : Ui.ON);
         }
         if (count > 0 && list.size() > count)
             Ui.text(
@@ -319,39 +413,28 @@ public class HudEditorScreen extends Screen {
         s.hidden = !s.hidden;
     }
 
-    private boolean beginPanel(String id, double x, double y, int px, int py) {
-        panelDrag = id;
-        panelGrabX = x - px;
-        panelGrabY = y - py;
-        dragId = null;
-        setFocused(null);
-        return true;
-    }
-
     @Override
     public boolean mouseClicked(MouseButtonEvent e, boolean doubled) {
-        // Same z-order as drawing: tools on top, then list, then information.
-        if (!chromeHidden) {
-            if (Ui.inside(e.x(), e.y(), dockX, dockY, dockW, 16) && e.button() == 0)
-                return beginPanel("dock", e.x(), e.y(), dockX, dockY);
-            if (Ui.inside(e.x(), e.y(), dockX, dockY, dockW, dockH)) {
-                super.mouseClicked(e, doubled);
+        if (overBar(e.x(), e.y())) {
+            super.mouseClicked(e, doubled);
+            return true;
+        }
+        if (overList(e.x(), e.y())) {
+            if (e.y() < listY + 18 && e.button() == 0) {
+                listDrag = true;
+                panelGrabX = e.x() - listX;
+                panelGrabY = e.y() - listY;
+                dragId = null;
+                setFocused(null);
                 return true;
             }
-            if (overList(e.x(), e.y())) {
-                if (e.y() < listY + 18 && e.button() == 0) return beginPanel("list", e.x(), e.y(), listX, listY);
-                var list = listRects();
-                int i = (int) (e.y() - listY - 20) / 21 + listScroll;
-                if (e.y() >= listY + 20 && i >= listScroll && i < Math.min(list.size(), listScroll + visibleRows())) {
-                    selectedId = list.get(i).id();
-                    if (e.button() == 1 || e.x() > listX + listW() - 30) toggleHidden();
-                }
-                return true;
+            var list = listRects();
+            int i = (int) (e.y() - listY - 20) / 21 + listScroll;
+            if (e.y() >= listY + 20 && i >= listScroll && i < Math.min(list.size(), listScroll + visibleRows())) {
+                selectedId = list.get(i).id();
+                if (e.button() == 1 || e.x() > listX + listW() - 30) toggleHidden();
             }
-            if (Ui.inside(e.x(), e.y(), infoX, infoY, infoW(), 48)) {
-                if (e.y() < infoY + 18 && e.button() == 0) return beginPanel("info", e.x(), e.y(), infoX, infoY);
-                return true;
-            }
+            return true;
         }
         var r = hit(e.x(), e.y());
         if (r == null) return false;
@@ -383,25 +466,26 @@ public class HudEditorScreen extends Screen {
         return true;
     }
 
+    /** Edges and centres of the other blocks along one axis, as snapping targets. */
+    private double[] neighbourTargets(String skipId, boolean horizontal) {
+        List<Double> out = new ArrayList<>();
+        for (var o : rects) {
+            if (o.sub() || o.id().equals(skipId) || o.id().equals("all") && !cfg().hudMerged) continue;
+            double a = horizontal ? o.x() : o.y(), size = horizontal ? o.w() : o.h();
+            out.add(a);
+            out.add(a + size / 2.0);
+            out.add(a + size);
+        }
+        double[] arr = new double[out.size()];
+        for (int i = 0; i < arr.length; i++) arr[i] = out.get(i);
+        return arr;
+    }
+
     @Override
     public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
-        if (panelDrag != null) {
-            int x = (int) Math.round(e.x() - panelGrabX), y = (int) Math.round(e.y() - panelGrabY);
-            switch (panelDrag) {
-                case "dock" -> {
-                    dockX = boundX(x, dockW);
-                    dockY = boundY(y, dockH);
-                    positionButtons();
-                }
-                case "list" -> {
-                    listX = boundX(x, listW());
-                    listY = boundY(y, listH());
-                }
-                case "info" -> {
-                    infoX = boundX(x, infoW());
-                    infoY = boundY(y, 48);
-                }
-            }
+        if (listDrag) {
+            listX = boundX((int) Math.round(e.x() - panelGrabX), listW());
+            listY = boundY((int) Math.round(e.y() - panelGrabY), listH());
             return true;
         }
         if (dragId == null) return super.mouseDragged(e, dx, dy);
@@ -409,6 +493,8 @@ public class HudEditorScreen extends Screen {
         if (r == null) return true;
         var s = slot(dragId);
         if (resizing) {
+            guideX = Double.NaN;
+            guideY = Double.NaN;
             double sx = (e.x() - dragX) / Math.max(1, initialW), sy = (e.y() - dragY) / Math.max(1, initialH);
             double amount = Math.abs(sx) >= Math.abs(sy) ? sx : sy;
             s.scale = Math.clamp(initialScale * (1 + amount), .5, 2);
@@ -416,9 +502,20 @@ public class HudEditorScreen extends Screen {
             HudLayout.store(s, initialX, initialY, initialW * ratio, initialH * ratio, width, height);
         } else {
             double x = e.x() - grabDx, y = e.y() - grabDy;
-            if (cfg().hudEditorSnap) {
-                x = HudLayout.snap(Math.round(x / 8) * 8, r.w(), width);
-                y = HudLayout.snap(Math.round(y / 8) * 8, r.h(), height);
+            boolean snapOn = cfg().hudEditorSnap;
+            if (snapOn) {
+                x = Math.round(x / 8) * 8;
+                y = Math.round(y / 8) * 8;
+            }
+            double tol = snapOn ? HudLayout.SNAP : 0.5;
+            var sx = HudLayout.snapAxis(x, r.w(), width, HudLayout.targets(width, neighbourTargets(dragId, true)), tol);
+            var sy = HudLayout.snapAxis(
+                    y, r.h(), height, HudLayout.targets(height, neighbourTargets(dragId, false)), tol);
+            guideX = sx.guide();
+            guideY = sy.guide();
+            if (snapOn) {
+                x = sx.pos();
+                y = sy.pos();
             }
             HudLayout.store(s, x, y, r.w(), r.h(), width, height);
         }
@@ -427,9 +524,11 @@ public class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent e) {
-        if (e.button() == 0 && (dragId != null || panelDrag != null)) {
+        guideX = Double.NaN;
+        guideY = Double.NaN;
+        if (e.button() == 0 && (dragId != null || listDrag)) {
             dragId = null;
-            panelDrag = null;
+            listDrag = false;
             super.mouseReleased(e);
             return true;
         }
@@ -464,14 +563,7 @@ public class HudEditorScreen extends Screen {
         if (r == null) return;
         double x = center ? Math.max(0, (width - r.w()) / 2.0) : r.x() + dx;
         double y = center ? Math.max(0, (height - r.h()) / 2.0) : r.y() + dy;
-        HudLayout.store(
-                slot(selectedScaleId()),
-                Math.clamp(x, 0, Math.max(0, width - r.w())),
-                Math.clamp(y, 0, Math.max(0, height - r.h())),
-                r.w(),
-                r.h(),
-                width,
-                height);
+        HudLayout.store(slot(selectedScaleId()), x, y, r.w(), r.h(), width, height);
     }
 
     @Override
@@ -484,8 +576,8 @@ public class HudEditorScreen extends Screen {
             placeSelected(true, 0, 0);
             return true;
         }
-        if (chromeHidden && e.key() >= 262 && e.key() <= 265) {
-            int step = e.hasShiftDown() ? 8 : 1;
+        if (e.key() >= 262 && e.key() <= 265) {
+            int step = e.hasShiftDown() ? 10 : 1;
             placeSelected(
                     false,
                     e.key() == 262 ? step : e.key() == 263 ? -step : 0,
@@ -502,10 +594,6 @@ public class HudEditorScreen extends Screen {
 
     @Override
     public void removed() {
-        cfg().hudEditorDockX = dockX;
-        cfg().hudEditorDockY = dockY;
-        cfg().hudEditorInfoX = infoX;
-        cfg().hudEditorInfoY = infoY;
         cfg().hudEditorListX = listX;
         cfg().hudEditorListY = listY;
         cfg().sanitize();
