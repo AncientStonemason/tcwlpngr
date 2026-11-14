@@ -166,6 +166,7 @@ public class WelcomeScreen extends Screen implements Rows.Ctx {
     }
 
     private void close() {
+        Rows.dragEnd();
         Rows.clearWheelFocus();
         Rows.blurText();
         minecraft.setScreen(parent);
@@ -214,24 +215,23 @@ public class WelcomeScreen extends Screen implements Rows.Ctx {
     }
 
     private void pageWhere() {
-        rows.add(new Rows.Note("От этого зависят проверки Skyblock и команда после переподключения.", Ui.SUB));
+        rows.add(new Rows.Note("От этого зависят проверки Skyblock.", Ui.SUB));
         rows.add(new Choice(
                 "skyblock",
                 "Hypixel Skyblock",
-                "Перезагрузка/лимбо, гости на ферме, staff рядом и в Tab, личные сообщения, «You are AFK». "
-                        + "После переподключения — /warp garden.",
+                "Перезагрузка/лимбо, гости на ферме, staff рядом и в Tab, личные сообщения, «You are AFK».",
                 () -> cfg().welcomeWhere,
                 v -> cfg().welcomeWhere = v));
         rows.add(new Choice(
                 "friends",
                 "Свой сервер с друзьями",
-                "Без проверок Skyblock (гости, Jacob, банвейв) и без поиска staff. Команды после переподключения нет.",
+                "Без проверок Skyblock (гости, Jacob, банвейв) и без поиска staff.",
                 () -> cfg().welcomeWhere,
                 v -> cfg().welcomeWhere = v));
         rows.add(new Choice(
                 "other",
                 "Другой сервер",
-                "Без проверок Skyblock, но staff рядом ищем. Команды после переподключения нет.",
+                "Без проверок Skyblock, но staff рядом ищем.",
                 () -> cfg().welcomeWhere,
                 v -> cfg().welcomeWhere = v));
     }
@@ -670,6 +670,18 @@ public class WelcomeScreen extends Screen implements Rows.Ctx {
             }
         }
         return super.mouseClicked(e, doubleClick);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
+        if (Rows.drag(this, e.x())) return true;
+        return super.mouseDragged(e, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent e) {
+        Rows.dragEnd();
+        return super.mouseReleased(e);
     }
 
     @Override
