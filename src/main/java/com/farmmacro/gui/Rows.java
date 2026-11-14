@@ -21,6 +21,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.util.StringUtil;
 
 /**
  * Строки содержимого вкладок (немедленный режим: значения читаются из конфига при каждой отрисовке,
@@ -251,7 +253,6 @@ public final class Rows {
         @Override
         void render(Ctx c, GuiGraphicsExtractor g, int x, int y, int w, int mx, int my, boolean hover) {
             boolean col = collapsible(), op = open();
-            String t = (col ? (op ? "▾ " : "▸ ") : onClick != null ? "› " : "") + title.toUpperCase();
             boolean hot = hover && (col || onClick != null);
             renderFlat(c, g, x, y, w, hot, col, op);
         }
@@ -1025,11 +1026,17 @@ public final class Rows {
             set.accept(list.get(idx).id());
         }
 
+        /** Те же координаты, что в {@link #render}: клик попадает ровно в нарисованный селектор. */
+        private int[] box(Ctx c) {
+            int h = height(c, lastW), cw = controlWidth(c);
+            return new int[] {lastX + lastW - cw - 2, hintShown() ? lastY + 3 : lastY + (h - 1 - 14) / 2, cw};
+        }
+
         @Override
         boolean click(Ctx c, double mx, double my, int button) {
-            if (!on()) return false;
-            int h = height(c, lastW), cw = controlWidth(c);
-            int cx = lastX + lastW - cw - 6, cy = lastY + (h - 3 - 14) / 2;
+            if (!on() || button > 1) return false;
+            int[] b = box(c);
+            int cx = b[0], cy = b[1], cw = b[2];
             if (!Ui.inside(mx, my, cx, cy, cw, 14)) return false;
             wheelFocus = this;
             int dir = button == 1 ? -1 : (mx < cx + cw / 2.0 ? -1 : 1);
@@ -1041,9 +1048,8 @@ public final class Rows {
         @Override
         boolean scroll(Ctx c, double mx, double my, double amount) {
             if (!on() || wheelFocus != this) return false;
-            int h = height(c, lastW), cw = controlWidth(c);
-            int cx = lastX + lastW - cw - 6, cy = lastY + (h - 3 - 14) / 2;
-            if (!Ui.inside(mx, my, cx, cy, cw, 14)) return false;
+            int[] b = box(c);
+            if (!Ui.inside(mx, my, b[0], b[1], b[2], 14)) return false;
             cycle(amount > 0 ? -1 : 1);
             return true;
         }
@@ -1274,11 +1280,27 @@ public final class Rows {
             return t == null ? "" : t;
         }
 
+        private String cachedText;
+        private int cachedW = -1;
+        private Font cachedFont;
+        private List<FormattedCharSequence> cachedLines = List.of();
+
+        /** Перенос строк считается для каждой заметки по нескольку раз за кадр — запоминаем по (текст, ширина, шрифт). */
+        private List<FormattedCharSequence> lines(Ctx c, String t, int w) {
+            if (!t.equals(cachedText) || w != cachedW || c.font() != cachedFont) {
+                cachedLines = c.font().split(Component.literal(t), w - 16);
+                cachedText = t;
+                cachedW = w;
+                cachedFont = c.font();
+            }
+            return cachedLines;
+        }
+
         @Override
         int height(Ctx c, int w) {
             String t = text.get();
             if (t == null || t.isEmpty()) return 0;
-            return c.font().split(Component.literal(t), w - 16).size() * 10 + 8;
+            return lines(c, t, w).size() * 10 + 8;
         }
 
         @Override
@@ -1288,7 +1310,7 @@ public final class Rows {
             int h = height(c, w);
             g.fill(x, y + 2, x + 1, y + h - 5, Ui.alpha(color, 0.8f));
             int ly = y + 3;
-            for (var line : c.font().split(Component.literal(t), w - 16)) {
+            for (var line : lines(c, t, w)) {
                 g.text(c.font(), line, x + 8, ly, Ui.lerp(color, Ui.SUB, 0.7f), false);
                 ly += 10;
             }
@@ -1420,13 +1442,20 @@ public final class Rows {
             c.clickSound();
         }
 
+        /** Первый видимый символ при последней отрисовке (текст длиннее поля прокручивается). */
+        private int viewOff;
+
         void placeCursor(Ctx c, double mx, int boxX) {
-            int rel = (int) mx - (boxX + 4), best = buf.length();
-            for (int i = 0; i <= buf.length(); i++)
-                if (c.font().width(buf.substring(0, i)) >= rel) {
-                    best = i;
+            int from = Math.min(viewOff, buf.length());
+            int rel = (int) mx - (boxX + 4), best = buf.length(), prev = 0;
+            for (int i = from; i <= buf.length(); i++) {
+                int w = c.font().width(buf.substring(from, i));
+                if (w >= rel) {
+                    best = rel - prev < w - rel ? Math.max(from, i - 1) : i;
                     break;
                 }
+                prev = w;
+            }
             cursor = best;
         }
 
@@ -1440,6 +1469,7 @@ public final class Rows {
                 off++;
                 vis = buf.substring(off);
             }
+            viewOff = off;
             vis = f.plainSubstrByWidth(vis, cw - 8);
             Ui.text(g, f, vis, cx + 4, cy + 3, Ui.TEXT);
             if ((Clock.millis() / 500) % 2 == 0) {
@@ -1453,6 +1483,7 @@ public final class Rows {
         void insert(String add) {
             StringBuilder ok = new StringBuilder();
             add.codePoints().forEach(cp -> {
+                if (!StringUtil.isAllowedChatCharacter(cp)) return; // вставка: без \r, \t и прочих управляющих
                 String ch = new String(Character.toChars(cp));
                 if (allowed(ch)) ok.append(ch);
             });
@@ -1513,7 +1544,12 @@ public final class Rows {
                 default -> {}
             }
             if (e.isPaste()) {
-                insert(Minecraft.getInstance().keyboardHandler.getClipboard().replace('\n', ' '));
+                insert(Minecraft.getInstance()
+                        .keyboardHandler
+                        .getClipboard()
+                        .replace("\r\n", " ")
+                        .replace('\n', ' ')
+                        .replace('\r', ' '));
                 return true;
             }
             if (e.hasControlDown() && e.key() == 65) {

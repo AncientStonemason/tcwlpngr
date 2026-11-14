@@ -257,6 +257,7 @@ public final class RouteBuffer {
             p.jump = false;
             p.drop = false;
             p.dropDepth = 0;
+            p.pointAction = new PointAction(); // «команда»/«предмет» на каждой новой точке ряда не нужны
         }
         route.points.add(p);
         marked.clear();
@@ -270,12 +271,15 @@ public final class RouteBuffer {
         if (size() < 2) return add(mc, x, y, z);
         if (size() >= MAX_POINTS) return -1;
         int best = 0;
-        double bd = Double.MAX_VALUE;
+        double bd = Double.MAX_VALUE, bdy = Double.MAX_VALUE;
         for (int i = 0; i + 1 < size(); i++) {
             RoutePoint a = route.points.get(i), b = route.points.get(i + 1);
             double d = distToSegmentXZ(x, z, a.x, a.z, b.x, b.z);
-            if (d < bd) {
+            // одинаковое расстояние в плоскости (этажи друг над другом) — берём отрезок ближе по высоте
+            double dy = Math.min(Math.abs(y - a.y), Math.abs(y - b.y));
+            if (d < bd - 1e-6 || Math.abs(d - bd) <= 1e-6 && dy < bdy) {
                 bd = d;
+                bdy = dy;
                 best = i;
             }
         }
@@ -286,6 +290,7 @@ public final class RouteBuffer {
         p.jump = false;
         p.drop = false;
         p.dropDepth = 0;
+        p.pointAction = new PointAction();
         route.points.add(best + 1, p);
         marked.clear();
         selected = best + 1;
