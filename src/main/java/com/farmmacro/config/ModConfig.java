@@ -721,6 +721,10 @@ public class ModConfig {
     public boolean uiAdvanced = false;
     /** Раздел меню → развёрнут (true) / свёрнут (false); нет ключа — как задано по умолчанию. */
     public Map<String, Boolean> uiSections = new LinkedHashMap<>();
+    /** Закреплённые модули главной страницы меню (id из каталога), порядок — как закрепляли. Не входят в профили. */
+    public List<String> favouriteModules = new ArrayList<>();
+    /** Недавно открытые модули (новые первыми, до {@link ConfigDefaults#RECENT_MAX}). Не входят в профили. */
+    public List<String> recentModules = new ArrayList<>();
 
     // ── Камера: пресеты yaw/pitch ────────────────────────────────────────────
     public static class CamPreset {
@@ -876,6 +880,8 @@ public class ModConfig {
                 .toList());
         if (uiColors == null) uiColors = new LinkedHashMap<>();
         uiColors.entrySet().removeIf(e -> e.getKey() == null || !UiStyle.validColor(e.getValue()));
+        favouriteModules = ConfigDefaults.cleanModuleIds(favouriteModules, ConfigDefaults.FAVOURITES_MAX);
+        recentModules = ConfigDefaults.cleanModuleIds(recentModules, ConfigDefaults.RECENT_MAX);
         uiBackgroundOpacity = Math.clamp(uiBackgroundOpacity, 0, 100);
         hudBackgroundOpacity = Math.clamp(hudBackgroundOpacity, 0, 100);
         uiCornerScale = Double.isFinite(uiCornerScale) ? Math.clamp(uiCornerScale, 0, 1) : .35;
@@ -1324,7 +1330,46 @@ public class ModConfig {
     }
 
     // ── Сохранение / загрузка ─────────────────────────────────────────────────
+    private static final Object SWAP = new Object();
+
+    /**
+     * Выполнить {@code body}, пока {@link #INSTANCE} временно заменён чистым {@code new ModConfig()}: меню так узнаёт
+     * значения по умолчанию, строя строки заново. Только поток игры; save/load ждут на том же замке, поэтому чистый
+     * конфиг не может уйти на диск, а живой всегда возвращается в {@code finally}.
+     *
+     * @param keepFrom живой конфиг: из него берутся только настройки вида меню (язык, режим), влияющие на подписи
+     */
+    public static void withPristine(ModConfig keepFrom, Runnable body) {
+        synchronized (SWAP) {
+            ModConfig live = INSTANCE;
+            ModConfig pristine = newPristine();
+            pristine.uiFollowGameLanguage = keepFrom.uiFollowGameLanguage;
+            pristine.uiAdvanced = keepFrom.uiAdvanced;
+            pristine.uiHints = keepFrom.uiHints;
+            INSTANCE = pristine;
+            try {
+                body.run();
+            } finally {
+                INSTANCE = live;
+            }
+        }
+    }
+
+    /** Настройки «из коробки», как после первой загрузки: {@code new ModConfig()} + {@link #sanitize()}. */
+    public static ModConfig newPristine() {
+        ModConfig c = new ModConfig();
+        c.sanitize();
+        c.ensureCamDefaults();
+        return c;
+    }
+
     public static void load() {
+        synchronized (SWAP) {
+            loadLocked();
+        }
+    }
+
+    private static void loadLocked() {
         flush(); // не читать файл, пока в очереди его более новая версия
         final Path CONFIG_PATH = configPath();
         boolean resave = false;
@@ -1387,10 +1432,14 @@ public class ModConfig {
 
     /** Пишет во временный файл и атомарно подменяет — конфиг не побьётся при вылете игры. */
     public static void save() {
-        CombatProfiles.captureActive(INSTANCE);
         final Path CONFIG_PATH = configPath();
+        final String json;
         // 2.1.0: снимок JSON — здесь, на потоке игры (согласованное состояние); диск — в фоне, с повторами.
-        final String json = GSON.toJson(INSTANCE);
+        // Замок не даёт снять снимок, пока меню строит строки на «чистом» конфиге (withPristine).
+        synchronized (SWAP) {
+            CombatProfiles.captureActive(INSTANCE);
+            json = GSON.toJson(INSTANCE);
+        }
         IoWorker.submitLatest("farmmacro.json", () -> AtomicFiles.writeUtf8(CONFIG_PATH, w -> w.write(json)));
     }
 
