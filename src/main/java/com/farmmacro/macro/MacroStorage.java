@@ -2,6 +2,7 @@ package com.farmmacro.macro;
 
 import com.farmmacro.camera.CameraBinding;
 import com.farmmacro.util.AtomicFiles;
+import com.farmmacro.util.Clock;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
@@ -12,8 +13,10 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
@@ -87,7 +90,7 @@ public class MacroStorage {
         if (file == null || frames.isEmpty()) return false;
         SavedMacro m = new SavedMacro();
         m.name = name.trim();
-        m.createdAt = System.currentTimeMillis();
+        m.createdAt = Clock.wallMillis();
         m.frames = new ArrayList<>(frames);
         return write(file, m, settings);
     }
@@ -124,7 +127,10 @@ public class MacroStorage {
 
     public List<MacroInfo> listMacros() {
         List<MacroInfo> result = new ArrayList<>();
-        if (!Files.isDirectory(MACRO_DIR)) return result;
+        if (!Files.isDirectory(MACRO_DIR)) {
+            infoCache.clear();
+            return result;
+        }
         try (Stream<Path> s = Files.list(MACRO_DIR)) {
             for (Path f :
                     (Iterable<Path>) s.filter(p -> p.getFileName().toString().endsWith(".json"))::iterator) {
@@ -138,6 +144,9 @@ public class MacroStorage {
                 }
                 result.add(cached);
             }
+            Set<String> seen = new HashSet<>();
+            for (MacroInfo i : result) seen.add(i.filename());
+            infoCache.keySet().retainAll(seen); // удалённые снаружи файлы не копятся в кеше
         } catch (Exception e) {
             LOGGER.warn("Не удалось прочитать список макросов: {}", e.toString());
         }
@@ -190,6 +199,10 @@ public class MacroStorage {
         try (Reader r = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             SavedMacro m = GSON.fromJson(r, SavedMacro.class);
             if (m != null && m.frames != null && !m.frames.isEmpty()) {
+                if (!framesUsable(m.frames)) {
+                    LOGGER.warn("Файл {} повреждён: пустые кадры или нечисловые координаты", filename);
+                    return null;
+                }
                 if (m.version > VERSION)
                     LOGGER.warn("Макрос {} новее мода (версия {}), читаю что понимаю", filename, m.version);
                 m.sanitize();
@@ -214,16 +227,44 @@ public class MacroStorage {
         }
     }
 
-    /** Защита от "../" в имени файла. */
-    private static Path resolve(String filename) {
-        Path p = MACRO_DIR.resolve(filename).normalize();
-        return p.startsWith(MACRO_DIR) ? p : null;
+    /** Кадр не null и без NaN/∞ — иначе воспроизведение упало бы на середине (NPE) или увело игрока в никуда. */
+    static boolean framesUsable(List<MacroFrame> frames) {
+        for (MacroFrame f : frames) {
+            if (f == null
+                    || !Double.isFinite(f.x)
+                    || !Double.isFinite(f.y)
+                    || !Double.isFinite(f.z)
+                    || !Float.isFinite(f.yaw)
+                    || !Float.isFinite(f.pitch)) return false;
+        }
+        return true;
     }
 
+    /** Защита от "../" в имени файла: только {@code *.json} строго внутри папки макросов. */
+    private static Path resolve(String filename) {
+        if (filename == null || !filename.endsWith(".json")) return null;
+        Path dir = MACRO_DIR.toAbsolutePath().normalize();
+        try {
+            Path p = dir.resolve(filename).normalize();
+            return p.startsWith(dir) && !p.equals(dir) ? p : null;
+        } catch (InvalidPathException e) {
+            return null;
+        }
+    }
+
+    private static final int NAME_MAX = 120;
+
     public static String sanitize(String name) {
-        return name.trim()
+        String s = name.trim()
                 .replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_")
                 .replaceAll("\\s+", "_")
                 .replaceAll("^\\.+", "");
+        if (s.length() > NAME_MAX) {
+            int cut = Character.isHighSurrogate(s.charAt(NAME_MAX - 1)) ? NAME_MAX - 1 : NAME_MAX;
+            s = s.substring(0, cut);
+        }
+        // CON, NUL, COM1… — зарезервированные имена устройств Windows (с любым расширением)
+        if (s.matches("(?i)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\\..*)?")) s = "_" + s;
+        return s;
     }
 }
