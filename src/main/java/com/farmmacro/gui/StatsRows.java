@@ -3,6 +3,7 @@ package com.farmmacro.gui;
 import com.farmmacro.config.ModConfig;
 import com.farmmacro.hud.StatsHud;
 import com.farmmacro.stats.*;
+import com.farmmacro.util.Clock;
 import java.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -114,28 +115,28 @@ public final class StatsRows {
         rows.add(new Rows.Note(StatsLedger::status, Ui.SUB));
         rows.add(new Rows.Buttons(
                 new Rows.Btn(
-                        () -> System.nanoTime() < confirmSession
+                        () -> Clock.millis() < confirmSession
                                 ? "Подтвердить сброс сессии"
                                 : "Сбросить сессию статистики",
                         () -> Rows.Style.SECONDARY,
                         () -> {
-                            long now = System.nanoTime();
+                            long now = Clock.millis();
                             if (now >= confirmSession) {
-                                confirmSession = now + 3_000_000_000L;
+                                confirmSession = now + 3000L;
                                 return;
                             }
                             confirmSession = 0;
                             Telemetry.resetSession();
                         }),
                 new Rows.Btn(
-                                () -> System.nanoTime() < confirmAll
+                                () -> Clock.millis() < confirmAll
                                         ? "Подтвердить сброс ВСЕГО"
                                         : "Сбросить daily / lifetime",
                                 () -> Rows.Style.DANGER,
                                 () -> {
-                                    long now = System.nanoTime();
+                                    long now = Clock.millis();
                                     if (now >= confirmAll) {
-                                        confirmAll = now + 3_000_000_000L;
+                                        confirmAll = now + 3000L;
                                         return;
                                     }
                                     confirmAll = 0;
@@ -144,7 +145,7 @@ public final class StatsRows {
                         .enabledIf(() -> c.save)));
         rows.add(new Rows.Section("История запусков").key("v.history"));
         rows.add(new Rows.Note(
-                "2.1.0: каждый запуск макроса — длительность, культура (из «Культура при старте»), маршрут, монеты и Farming XP за запуск. Монеты — те же наблюдаемые квитанции, что выше. На диск (sessions.csv) — только при включённых «Daily / lifetime локально»",
+                "Каждый запуск макроса — длительность, культура (из «Культура при старте»), маршрут, монеты и Farming XP за запуск. Монеты — те же наблюдаемые квитанции, что выше. На диск (sessions.csv) — только при включённых «Daily / lifetime локально»",
                 Ui.SUB));
         rows.add(new Rows.Note(SessionHistory::summary, Ui.SUB));
         rows.add(new Rows.Buttons(
@@ -156,12 +157,12 @@ public final class StatsRows {
                                 + SessionHistory.runs().size() + ")"));
                 }),
                 new Rows.Btn(
-                        () -> System.nanoTime() < confirmHistory ? "Точно очистить?" : "Очистить историю",
+                        () -> Clock.millis() < confirmHistory ? "Точно очистить?" : "Очистить историю",
                         () -> Rows.Style.DANGER,
                         () -> {
-                            long now = System.nanoTime();
+                            long now = Clock.millis();
                             if (now >= confirmHistory) {
-                                confirmHistory = now + 3_000_000_000L;
+                                confirmHistory = now + 3000L;
                                 return;
                             }
                             confirmHistory = 0;
@@ -201,7 +202,7 @@ public final class StatsRows {
                 Ui.SUB));
         rows.add(new Rows.Number(
                 "Твой Farming cap",
-                "50 по умолчанию. Укажи реально разблокированный максимум до60. ETA60 — теоретическая; сам мод cap не открывает",
+                "50 по умолчанию. Укажи реально разблокированный максимум до 60. ETA 60 — теоретическая; сам мод cap не открывает",
                 () -> c.farmingCap,
                 v -> {
                     c.farmingCap = (int) Math.round(v);
@@ -218,7 +219,7 @@ public final class StatsRows {
                         + StatsHud.num(Telemetry.petValue()),
                 Ui.SUB));
         rows.add(new Rows.Note(
-                "Питомец из Tab или вручную открытого Pets с активной серверной меткой. Не открываем меню автоматически. XP до уровня — только явный Progress to Level из меню, снимок до60с; Tab его НЕ освежает. petInfo.exp — отдельно общий XP, не XP уровня. MAX только по MAX LEVEL. Одинаковых по имени/уровню питомцев Tab не различает; после смены обнови Pets вручную. Рыночная цена питомца не извлекается из Bazaar; по желанию ниже ручная пометка, не точная текущая цена аукциона.",
+                "Питомец из Tab или вручную открытого Pets с активной серверной меткой. Не открываем меню автоматически. XP до уровня — только явный Progress to Level из меню, снимок до 60 с; Tab его НЕ освежает. petInfo.exp — отдельно общий XP, не XP уровня. MAX только по MAX LEVEL. Одинаковых по имени/уровню питомцев Tab не различает; после смены обнови Pets вручную. Рыночная цена питомца не извлекается из Bazaar; по желанию ниже ручная пометка, не точная текущая цена аукциона.",
                 Ui.SUB));
         rows.add(new Rows.Number(
                 "Ручная цена текущего питомца",
@@ -236,7 +237,7 @@ public final class StatsRows {
                 100000,
                 v -> v < 0 ? "неизвестно" : Rows.num(v)));
         rows.add(new Rows.Note(
-                "Позиции, масштаб, видимость и личные цвета — существующий F8; новые плашки можно тащить отдельно. Ничего не сбрасывается автоматически. Minecraft/визуальный стенд не запускались, нужна проверка читаемости у тебя.",
+                "Позиции, масштаб, видимость и личные цвета — существующий F8; новые плашки можно тащить отдельно. Ничего не сбрасывается автоматически.",
                 Ui.SUB));
     }
 
