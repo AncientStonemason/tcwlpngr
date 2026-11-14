@@ -65,5 +65,12 @@
   "farmmacro.module.fishing.desc": "Подсечка, перезаброс и Fireveil для морских существ.",
   "farmmacro.module.performance.title": "Производительность",
   "farmmacro.module.performance.desc": "PERF, ограничения, замеры шагов и безопасный отчёт/ZIP.",
-  "farmmacro.module.open_hint": "Открытие не запускает модуль."
+  "farmmacro.module.open_hint": "Открытие не запускает модуль.",
+  "farmmacro.header.back": "К каталогу модулей",
+  "farmmacro.home.title": "Модули",
+  "farmmacro.home.found": "Найдено: %s · Enter — настройки · запуск отдельно",
+  "farmmacro.home.hud_editor": "Редактор HUD",
+  "farmmacro.home.hud_editor.tip": "Редактор HUD: положение и размер плашек",
+  "farmmacro.home.all_settings": "Все параметры",
+  "farmmacro.home.all_settings.tip": "Все параметры по вкладкам и поиск по всем настройкам"
 }

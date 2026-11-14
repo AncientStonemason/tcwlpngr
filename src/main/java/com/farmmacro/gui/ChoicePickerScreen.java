@@ -40,8 +40,7 @@ public final class ChoicePickerScreen extends Screen {
         y = (height - h) / 2;
         buttons.clear();
         visibleRows = Math.max(1, (h - 116) / 22);
-        search = addRenderableWidget(
-                new EditBox(font, x + 12, y + 35, w - 24, 20, Component.literal("Поиск режимов и мобов")));
+        search = addRenderableWidget(new EditBox(font, x + 12, y + 35, w - 24, 20, Component.literal(heading)));
         search.setMaxLength(80);
         search.setValue(query);
         for (int row = 0; row < visibleRows; row++) {

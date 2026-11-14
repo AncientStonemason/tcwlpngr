@@ -1,5 +1,6 @@
 package com.farmmacro.route;
 
+import com.farmmacro.util.AtomicFiles;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -138,11 +139,7 @@ public final class ChunkCacheStore {
                     out.write(e.getValue());
                 }
             }
-            try {
-                Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.replace(tmp, f);
         } finally {
             Files.deleteIfExists(tmp);
         }

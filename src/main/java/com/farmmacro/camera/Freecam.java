@@ -49,7 +49,8 @@ public final class Freecam {
                 || mc.screen != null
                 || !mc.isWindowActive()
                 || mc.isPaused()
-                || PanicHandoff.pending()) return;
+                || PanicHandoff.pending()
+                || MacroManager.INSTANCE.isRecording()) return; // до побочных эффектов: запись не должна терять ввод
         AutoFish.INSTANCE.stop("Freecam");
         MacroManager.INSTANCE.stopPlayback(mc, "Остановлено для Freecam");
         AimAssist.INSTANCE.handoff("freecam");
@@ -59,7 +60,7 @@ public final class Freecam {
         Freelook.off(mc, null);
         MouseLock.unlock(mc, null);
         Ungrab.off(mc, null);
-        if (NavigationInput.busy() || MacroManager.INSTANCE.isRecording()) return;
+        if (NavigationInput.busy()) return;
         world = mc.level;
         player = mc.player;
         previous = mc.options.getCameraType();
