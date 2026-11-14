@@ -229,6 +229,8 @@ public final class PanicSound {
             playGameFallback(id, volume, pitch);
         } catch (Throwable e) {
             LOGGER.error("Не удалось проиграть звук {}: {}", id, e.toString());
+            // A malformed id from a hand-edited config must not leave a panic silent.
+            if (id.startsWith("mc:")) playGameFallback("builtin:siren", volume, pitch);
         }
     }
 

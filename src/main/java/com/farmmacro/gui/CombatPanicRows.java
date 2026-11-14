@@ -82,7 +82,7 @@ public final class CombatPanicRows {
                 .under(() -> p.enabled && p.teleport));
         rows.add(new Rows.Number(
                         "Combat: коррекция по горизонтали",
-                        "По умолчанию0.8бл, не расширяется автоматически из-за высокого пинга",
+                        "По умолчанию 0.8 бл, не расширяется автоматически из-за высокого пинга",
                         () -> p.correctionHorizontal,
                         v -> {
                             p.correctionHorizontal = v;
@@ -96,7 +96,7 @@ public final class CombatPanicRows {
                 .under(() -> p.enabled && p.teleport && p.smallCorrections));
         rows.add(new Rows.Number(
                         "Combat: коррекция по высоте",
-                        "По умолчанию0.5бл. Большой перенос/респавн не исключаются этим допуском",
+                        "По умолчанию 0.5 бл. Большой перенос/респавн не исключаются этим допуском",
                         () -> p.correctionVertical,
                         v -> {
                             p.correctionVertical = v;
@@ -124,7 +124,7 @@ public final class CombatPanicRows {
                 .under(() -> p.enabled && p.teleport && p.smallCorrections));
         rows.add(new Rows.Number(
                         "Combat: максимум коррекций",
-                        "Пятый пакет при лимите4 уже остановит. Только реальные сдвиги больше0.001бл",
+                        "Пятый пакет при лимите 4 уже остановит. Только реальные сдвиги больше 0.001 бл",
                         () -> p.correctionMaxPackets,
                         v -> {
                             p.correctionMaxPackets = (int) v;
@@ -170,7 +170,7 @@ public final class CombatPanicRows {
                 .under(() -> p.enabled));
         rows.add(new Rows.Number(
                         "Combat: порог серверного поворота",
-                        "По умолчанию20°. Не зависит от переключателя телепорта и допуска малых коррекций",
+                        "По умолчанию 20°. Не зависит от переключателя телепорта и допуска малых коррекций",
                         () -> p.serverRotationDegrees,
                         v -> {
                             p.serverRotationDegrees = v;
@@ -316,7 +316,7 @@ public final class CombatPanicRows {
                         .under(() -> p.enabled));
         rows.add(new Rows.Number(
                         "Combat: длительность экрана",
-                        "Номинально20тиков в секунду",
+                        "Номинально 20 тиков в секунду",
                         () -> p.redScreenTicks,
                         v -> {
                             p.redScreenTicks = (int) v;

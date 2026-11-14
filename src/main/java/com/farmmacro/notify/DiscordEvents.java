@@ -14,8 +14,9 @@ public final class DiscordEvents {
         String detail = c.webhookDetails
                 ? ServerText.clean(reason)
                 : "Требуется ручное управление; автоматическое продолжение запрещено";
-        if (c.webhookDetails && mc.player != null) {
-            detail = mask(detail, mc.player.getGameProfile().name());
+        if (c.webhookDetails) {
+            // Quote/coordinate scrubbing must not depend on a live player (panic can flush during a world change).
+            if (mc.player != null) detail = mask(detail, mc.player.getGameProfile().name());
             if (mc.getConnection() != null) {
                 int n = 0;
                 for (var info : mc.getConnection().getListedOnlinePlayers()) {
@@ -23,7 +24,9 @@ public final class DiscordEvents {
                     detail = mask(detail, info.getProfile().name());
                 }
             }
-            detail = detail.replaceAll("[«\"].*?[»\"]", "[TEXT]")
+            // Greedy «…»: quoted chat may itself contain quotes; a lazy match would leak the tail.
+            detail = detail.replaceAll("(?s)«.*»", "[TEXT]")
+                    .replaceAll("(?s)\".*?\"", "[TEXT]")
                     .replaceAll(
                             "(?i)(?:[XYZ]\\s*[:=]\\s*)?-?[0-9]+(?:\\.[0-9]+)?[, ]+(-?[0-9]+(?:\\.[0-9]+)?)[, ]+(-?[0-9]+(?:\\.[0-9]+)?)",
                             "[COORDS]");

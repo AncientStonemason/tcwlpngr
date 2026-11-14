@@ -1,5 +1,6 @@
 package com.farmmacro.route;
 
+import com.farmmacro.FarmMacroMod;
 import com.farmmacro.util.Diagnostics;
 import java.util.HashSet;
 import java.util.List;
@@ -139,6 +140,7 @@ public final class PathJob {
                 f.complete(result);
             } catch (Throwable t) {
                 lastResult = "FAILED";
+                FarmMacroMod.LOGGER.warn("Поиск пути: сбой в потоке поиска", t);
                 f.completeExceptionally(t);
             } finally {
                 job.queuedTask = null;

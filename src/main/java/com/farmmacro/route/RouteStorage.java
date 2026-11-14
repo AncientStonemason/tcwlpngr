@@ -3,17 +3,20 @@ package com.farmmacro.route;
 import com.farmmacro.macro.MacroSettings;
 import com.farmmacro.macro.MacroStorage;
 import com.farmmacro.util.AtomicFiles;
+import com.farmmacro.util.Clock;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import net.fabricmc.loader.api.FabricLoader;
 import org.slf4j.Logger;
@@ -28,13 +31,17 @@ public final class RouteStorage {
 
     public record RouteInfo(String name, int points, String dimension, String world, String filename, long modified) {}
 
-    private final Map<String, RouteInfo> cache = new HashMap<>();
+    private static final Pattern WINDOWS_DEVICE = Pattern.compile("(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\\..*)?");
+
+    private final Map<String, RouteInfo> cache = new ConcurrentHashMap<>();
 
     private RouteStorage() {}
 
     private static Path fileFor(String name) {
+        if (name == null) return null;
         String safe = MacroStorage.sanitize(name);
         if (safe.isEmpty()) return null;
+        if (WINDOWS_DEVICE.matcher(safe).matches()) safe = "_" + safe; // CON.json и т. п. на Windows — устройство
         try {
             return DIR.resolve(safe + ".json");
         } catch (InvalidPathException e) {
@@ -52,7 +59,7 @@ public final class RouteStorage {
         if (file == null || route == null || route.points.isEmpty()) return false;
         PointRoute r = route.copy();
         r.name = name.trim();
-        if (r.createdAt == 0) r.createdAt = System.currentTimeMillis();
+        if (r.createdAt == 0) r.createdAt = Clock.wallMillis();
         return write(file, r);
     }
 
@@ -85,25 +92,34 @@ public final class RouteStorage {
 
     public List<RouteInfo> list() {
         List<RouteInfo> out = new ArrayList<>();
-        if (!Files.isDirectory(DIR)) return out;
+        if (!Files.isDirectory(DIR)) {
+            cache.clear();
+            return out;
+        }
         try (Stream<Path> s = Files.list(DIR)) {
             for (Path f :
                     (Iterable<Path>) s.filter(p -> p.getFileName().toString().endsWith(".json"))::iterator) {
-                String fn = f.getFileName().toString();
-                long mod = Files.getLastModifiedTime(f).toMillis();
-                RouteInfo info = cache.get(fn);
-                if (info == null || info.modified() != mod) {
-                    PointRoute r = read(f);
-                    if (r == null) continue;
-                    String name = r.name != null ? r.name : fn.substring(0, fn.length() - 5);
-                    info = new RouteInfo(name, r.points.size(), r.dimension, r.world, fn, mod);
-                    cache.put(fn, info);
+                try {
+                    String fn = f.getFileName().toString();
+                    long mod = Files.getLastModifiedTime(f).toMillis();
+                    RouteInfo info = cache.get(fn);
+                    if (info == null || info.modified() != mod) {
+                        PointRoute r = read(f);
+                        if (r == null) continue;
+                        String name = r.name != null ? r.name : fn.substring(0, fn.length() - 5);
+                        info = new RouteInfo(name, r.points.size(), r.dimension, r.world, fn, mod);
+                        cache.put(fn, info);
+                    }
+                    out.add(info);
+                } catch (IOException e) { // файл исчез между Files.list и чтением — остальные показываем
+                    LOGGER.warn("Пропущен файл маршрута {}: {}", f.getFileName(), e.toString());
                 }
-                out.add(info);
             }
         } catch (Exception e) {
             LOGGER.warn("Не удалось прочитать список маршрутов: {}", e.toString());
         }
+        // удалённые снаружи файлы не копятся в кэше
+        cache.keySet().removeIf(fn -> out.stream().noneMatch(i -> i.filename().equals(fn)));
         out.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
         return out;
     }
@@ -146,8 +162,15 @@ public final class RouteStorage {
         }
     }
 
+    /** Только файл {@code *.json} прямо в папке маршрутов; имя из файла/строки настроек не доверенное. */
     private static Path resolve(String filename) {
-        Path p = DIR.resolve(filename).normalize();
-        return p.startsWith(DIR) ? p : null;
+        if (filename == null || !filename.endsWith(".json")) return null;
+        try {
+            Path dir = DIR.toAbsolutePath().normalize();
+            Path p = dir.resolve(filename).normalize();
+            return dir.equals(p.getParent()) ? p : null;
+        } catch (InvalidPathException e) {
+            return null;
+        }
     }
 }

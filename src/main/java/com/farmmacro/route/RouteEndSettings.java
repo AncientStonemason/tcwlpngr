@@ -35,19 +35,9 @@ public class RouteEndSettings {
     }
 
     public static String cleanCommand(String s) {
-        return s == null
-                ? ""
-                : s.replace("\r", "")
-                        .replace("\n", "")
-                        .trim()
-                        .substring(
-                                0,
-                                Math.min(
-                                        256,
-                                        s.replace("\r", "")
-                                                .replace("\n", "")
-                                                .trim()
-                                                .length()));
+        if (s == null) return "";
+        String t = s.replace("\r", "").replace("\n", "").trim();
+        return t.substring(0, Math.min(256, t.length()));
     }
 
     public void sanitize() {
