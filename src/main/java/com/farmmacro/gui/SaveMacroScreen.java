@@ -38,6 +38,11 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
         boolean save(String name);
 
         void saved(String name);
+
+        /** false — существующее имя заменить нельзя (нужно другое). */
+        default boolean allowOverwrite() {
+            return true;
+        }
     }
 
     private final Target target;
@@ -123,6 +128,10 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
         String name = text.trim();
         if (MacroStorage.sanitize(name).isEmpty()) {
             setStatus("Введи название", Ui.DANGER);
+            return;
+        }
+        if (!target.allowOverwrite() && target.exists(name)) {
+            setStatus("Такое имя уже занято — выбери другое", Ui.DANGER);
             return;
         }
         if (target.exists(name) && !name.equals(confirmOverwrite)) {

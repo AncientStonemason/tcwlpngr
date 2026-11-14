@@ -17,6 +17,11 @@ final class FarmSchemeRows {
         return out;
     }
 
+    /** Для генератора: пустой ключ («авто») недопустим, санитайзер заменил бы его на A/W. */
+    static List<Rows.Choice> fixedKeyChoices() {
+        return keyChoices().stream().filter(k -> !k.id().isEmpty()).toList();
+    }
+
     private static String label(String k) {
         return switch (k) {
             case "s_shape" -> "S-shape: A/D + переход";
@@ -87,14 +92,14 @@ final class FarmSchemeRows {
         rows.add(new Rows.Selector(
                         "Первый ряд",
                         "Для S-shape/A-D/W-S/какао. У тростника A/S и грибов A/SD фиксированный цикл.",
-                        FarmSchemeRows::keyChoices,
+                        FarmSchemeRows::fixedKeyChoices,
                         () -> s.firstKeys,
                         v -> edit.accept(() -> s.firstKeys = v.isEmpty() ? "a" : v))
                 .enabledIf(idle));
         rows.add(new Rows.Selector(
                         "Клавиши перехода",
                         null,
-                        FarmSchemeRows::keyChoices,
+                        FarmSchemeRows::fixedKeyChoices,
                         () -> s.laneKeys,
                         v -> edit.accept(() -> s.laneKeys = v.isEmpty() ? "w" : v))
                 .enabledIf(idle));

@@ -1,7 +1,8 @@
 package com.farmmacro.gui;
 /** Shared drawing/hit geometry, pure and bounded. All coordinates are GUI units. */
 public final class MenuLayout {
-    public static final int HEADER = 48, GUTTER = 12, CARD_HEIGHT = 92;
+    /** CARD_HEIGHT — шаг карточек каталога вместе с зазором CARD_GAP между ними. */
+    public static final int HEADER = 48, GUTTER = 12, CARD_HEIGHT = 46, CARD_GAP = 6;
 
     public record Rect(int x, int y, int w, int h) {
         public boolean contains(double px, double py) {

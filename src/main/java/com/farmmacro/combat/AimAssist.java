@@ -488,8 +488,25 @@ public final class AimAssist {
                             && mob.getType().getDescriptionId().endsWith(".enderman");
         if (!c.aimSelectedOnly) return true;
         for (String n : c.aimMobNames) if (n.equalsIgnoreCase(name)) return true;
-        for (String n : c.aimExtraNames.split("[,;\\n]")) if (n.strip().equalsIgnoreCase(name)) return true;
+        for (String n : extraNames(c.aimExtraNames)) if (n.equalsIgnoreCase(name)) return true;
         return false;
+    }
+
+    private static final java.util.regex.Pattern NAME_SEPARATORS = java.util.regex.Pattern.compile("[,;\\n]");
+    private static final String[] NO_NAMES = new String[0];
+    private static String extraRaw = "";
+    private static String[] extraParsed = NO_NAMES;
+
+    /** Разбор списка имён кэшируется: фильтр вызывается на каждый моб каждый тик и каждый кадр подсветки. */
+    private static String[] extraNames(String raw) {
+        if (raw == null) return NO_NAMES;
+        if (!raw.equals(extraRaw)) {
+            String[] parts = NAME_SEPARATORS.split(raw);
+            for (int i = 0; i < parts.length; i++) parts[i] = parts[i].strip();
+            extraParsed = parts;
+            extraRaw = raw;
+        }
+        return extraParsed;
     }
 
     private boolean location(Minecraft mc, ModConfig c) {
@@ -1191,7 +1208,6 @@ public final class AimAssist {
             camera.reset();
             return;
         }
-        float y0 = mc.player.getYRot(), p0 = mc.player.getXRot();
         if (d.yaw() != 0 || d.pitch() != 0) {
             if (!MotionController.turn(MotionPolicy.Owner.COMBAT, d.yaw(), d.pitch())) {
                 camera.reset();

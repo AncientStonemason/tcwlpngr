@@ -40,7 +40,9 @@ public final class PrivateText {
         s = IP.matcher(s).replaceAll("[IP]");
         s = UUID.matcher(s).replaceAll("[UUID]");
         s = s.replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
-        return s.length() > 1900 ? s.substring(0, 1899) + "…" : s;
+        if (s.length() <= 1900) return s;
+        int cut = Character.isHighSurrogate(s.charAt(1898)) ? 1898 : 1899; // do not split a surrogate pair
+        return s.substring(0, cut) + "…";
     }
 
     public static JsonElement portable(JsonElement e) {
