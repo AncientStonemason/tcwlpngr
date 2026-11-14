@@ -40,7 +40,7 @@ public final class CombatProfileRows {
                             .filter(p -> !CombatProfiles.ZEALOTS.equals(p.id))
                             .findFirst()
                             .orElse(null);
-                    if (other == null) CombatProfiles.duplicate(c, true);
+                    if (other == null) limitHint(CombatProfiles.duplicate(c, true));
                     else CombatProfiles.select(c, other.id);
                     save.run();
                     rebuild.run();
@@ -48,7 +48,7 @@ public final class CombatProfileRows {
         rows.add(new Rows.Buttons(
                 new Rows.Btn("Новый из зиалотов", Rows.Style.SECONDARY, () -> {
                     AimAssist.INSTANCE.configure(c.aimAssistEnabled);
-                    CombatProfiles.duplicate(c, true);
+                    limitHint(CombatProfiles.duplicate(c, true));
                     save.run();
                     rebuild.run();
                 }),
@@ -60,7 +60,7 @@ public final class CombatProfileRows {
                 })));
         rows.add(new Rows.TextField(
                 "Имя профиля",
-                "До40 символов; настройки сохраняются автоматически",
+                "До 40 символов; настройки сохраняются автоматически",
                 () -> CombatProfiles.active(c).name,
                 v -> {
                     if (v.isBlank()) return false;
@@ -75,13 +75,13 @@ public final class CombatProfileRows {
         rows.add(new Rows.Buttons(
                 new Rows.Btn("Копия текущего", Rows.Style.SECONDARY, () -> {
                     AimAssist.INSTANCE.configure(c.aimAssistEnabled);
-                    CombatProfiles.duplicate(c, false);
+                    limitHint(CombatProfiles.duplicate(c, false));
                     save.run();
                     rebuild.run();
                 }),
                 new Rows.Btn("Удалить свой профиль", Rows.Style.SECONDARY, () -> {
                     AimAssist.INSTANCE.configure(c.aimAssistEnabled);
-                    CombatProfiles.remove(c);
+                    if (!CombatProfiles.remove(c)) say("Профиль «Зиалоты» удалить нельзя");
                     save.run();
                     rebuild.run();
                 })));
@@ -111,12 +111,21 @@ public final class CombatProfileRows {
                 })));
         rows.add(new Rows.Note(() -> CombatProfiles.summary(c), Ui.SUB));
         rows.add(new Rows.Note(
-                "Экспорт KAELIX-COMBAT1: содержит только один профиль. Импорт создаёт новый, не меняет клавиши, панику, разрешение aim и лоадауты. Сброс меняет только выбранный: автоогонь/A-D выключаются; своих мобов выбери заново.",
+                "Экспорт KAELIX-COMBAT1: содержит только один профиль. Импорт создаёт новый, не меняет клавиши, панику и разрешение aim. Сброс меняет только выбранный: автоогонь/A-D выключаются; своих мобов выбери заново.",
                 Ui.SUB));
         rows.add(new Rows.Note(
                 () -> "Редактируется: " + CombatProfiles.active(c).name + " • " + c.combatProfiles.size()
                         + "/24 профилей. Новая копия из зиалотов требует выбрать имена мобов в каталоге; пустой список никого не атакует.",
                 Ui.SUB));
+    }
+
+    private static void say(String text) {
+        var mc = Minecraft.getInstance();
+        if (mc.player != null) mc.player.sendOverlayMessage(Component.literal(text));
+    }
+
+    private static void limitHint(boolean created) {
+        if (!created) say("Достигнут лимит 24 профилей");
     }
 
     private CombatProfileRows() {}

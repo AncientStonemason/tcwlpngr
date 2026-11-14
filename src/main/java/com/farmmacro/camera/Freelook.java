@@ -72,6 +72,8 @@ public final class Freelook {
         if (mc.player == null || mc.level == null) {
             if (active) {
                 active = false;
+                // иначе следующий мир открылся бы в третьем лице
+                if (mc.options != null && prevType != null) mc.options.setCameraType(prevType);
                 prevType = null;
             }
             return;

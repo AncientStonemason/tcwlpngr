@@ -14,7 +14,8 @@ final class CustomizationRows {
                 label,
                 "#RRGGBB; пусто — цвет темы",
                 get,
-                v -> {
+                text -> {
+                    String v = text.matches("[0-9a-fA-F]{6}") ? "#" + text : text;
                     if (!UiStyle.validColor(v)) return false;
                     set.accept(v);
                     save.run();
