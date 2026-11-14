@@ -384,12 +384,8 @@ public final class RouteWalker implements PlaybackSource {
             }
             out.panic = out.panic + " (после " + unstuckTries + " попыток отойти)";
         }
-        if (out.panic != null) {
-            // v1.14.2-pre: через реестр детекторов (действие «Подозрительность»/«Журнал» — идём дальше)
-            String id = out.panic.startsWith("Застрял") ? "stuck" : out.panic.startsWith("Сошёл") ? "drift" : "floor";
-            // v1.15: уже решаем «вернуться на маршрут» (вне линии < REJOIN_TICKS) — «Сошёл»/«Не тот этаж» не поднимать
-            if (offTicks > 0 && !"stuck".equals(id)) out.panic = null;
-        }
+        // v1.15: уже решаем «вернуться на маршрут» (вне линии < REJOIN_TICKS) — «Сошёл»/«Не тот этаж» не поднимать
+        if (out.panic != null && offTicks > 0 && !out.panic.startsWith("Застрял")) out.panic = null;
         if (out.panic != null) {
             String id = out.panic.startsWith("Застрял") ? "stuck" : out.panic.startsWith("Сошёл") ? "drift" : "floor";
             if (PanicDetector.INSTANCE.fire(mc, id, out.panic)) return true;

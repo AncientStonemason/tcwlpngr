@@ -46,6 +46,7 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
     private double scroll;
     private final DragWindow dragWindow = new DragWindow();
     private boolean modified;
+    private boolean closed;
     private String tooltip;
     private boolean wantHand;
 
@@ -494,12 +495,14 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
+        if (Rows.drag(this, e.x())) return true;
         if (dragWindow.move(e.x(), e.y())) return true;
         return super.mouseDragged(e, dx, dy);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent e) {
+        Rows.dragEnd();
         if (dragWindow.release()) return true;
         return super.mouseReleased(e);
     }
@@ -541,10 +544,24 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
 
     @Override
     public void onClose() {
+        finish();
+        minecraft.setScreen(parent);
+    }
+
+    /** Экран заменили другим (паника, смерть, отключение): снимок для Ctrl+Z не должен остаться лишним. */
+    @Override
+    public void removed() {
+        finish();
+        super.removed();
+    }
+
+    private void finish() {
+        Rows.dragEnd();
         Rows.clearWheelFocus();
         Rows.blurText();
+        if (closed) return;
+        closed = true;
         if (!modified) RouteBuffer.INSTANCE.undoDrop();
-        minecraft.setScreen(parent);
     }
 
     // ── Rows.Ctx ─────────────────────────────────────────────────────────────

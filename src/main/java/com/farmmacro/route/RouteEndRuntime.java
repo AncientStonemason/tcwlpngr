@@ -3,6 +3,7 @@ package com.farmmacro.route;
 import com.farmmacro.macro.*;
 import com.farmmacro.panic.PanicDetector;
 import com.farmmacro.panic.PanicHandoff;
+import com.farmmacro.util.Clock;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 
@@ -32,7 +33,7 @@ public final class RouteEndRuntime {
     }
 
     public static long now() {
-        return System.nanoTime() / 1000000;
+        return Clock.millis();
     }
 
     public boolean tick(Minecraft mc) {
