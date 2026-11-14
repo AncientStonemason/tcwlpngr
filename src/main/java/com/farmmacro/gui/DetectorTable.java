@@ -111,7 +111,7 @@ final class DetectorTable {
                             save();
                         })
                         .tip(
-                                "Кроме тех, кому нужны свои данные или которые часто ложно срабатывают: BPS, банвейв, Jacob, сход с маршрута, откат назад"),
+                                "Кроме тех, кому нужны свои данные или которые часто ложно срабатывают: BPS, текст Farming XP, банвейв, Jacob, сход с маршрута, откат назад"),
                 new Rows.Btn("Выключить все", Rows.Style.DANGER, () -> {
                             Detectors.setAll(false);
                             save();
@@ -350,6 +350,26 @@ final class DetectorTable {
             }
             case "chat" ->
                 l.add(tog("Мой ник в чате", null, () -> cfg().chatMentionName, v -> cfg().chatMentionName = v));
+            case "nearbyChat" -> {
+                l.add(num(
+                        "Радиус, бл",
+                        null,
+                        () -> cfg().nearbyChatRadius,
+                        v -> cfg().nearbyChatRadius = v,
+                        1,
+                        32,
+                        1,
+                        5));
+                l.add(inum(
+                        "Память, с",
+                        null,
+                        () -> cfg().nearbyChatMemorySec,
+                        v -> cfg().nearbyChatMemorySec = (int) v,
+                        3,
+                        60,
+                        1,
+                        5));
+            }
             case "playerNear" -> {
                 l.add(num(
                         "Радиус, бл",
@@ -420,7 +440,7 @@ final class DetectorTable {
             case "farmingXp" ->
                 l.add(num(
                         "Без текста XP, с",
-                        "Нужно ранее увидеть XP в том же сборе; +10тиков подтверждения",
+                        "Нужно ранее увидеть XP в том же сборе; +10 тиков подтверждения",
                         () -> cfg().farmingXpMissingSec,
                         v -> cfg().farmingXpMissingSec = v,
                         3,
