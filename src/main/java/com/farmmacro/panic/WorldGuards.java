@@ -313,7 +313,7 @@ final class WorldGuards {
                     "bps",
                     String.format(
                             Locale.ROOT,
-                            "При сборе урожая низкий BPS: %.1f < %.1f, подтверждено20тиков",
+                            "При сборе урожая низкий BPS: %.1f < %.1f, подтверждено 20 тиков",
                             lastBps,
                             c.bpsMin));
         if (working) {

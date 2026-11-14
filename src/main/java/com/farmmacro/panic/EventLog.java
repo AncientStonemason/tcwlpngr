@@ -50,9 +50,9 @@ public final class EventLog {
             String pos = "-";
             String lap = "-";
             Minecraft mc = Minecraft.getInstance();
-            if (mc != null && mc.player != null)
-                pos = String.format(
-                        Locale.ROOT, "%.2f %.2f %.2f", mc.player.getX(), mc.player.getY(), mc.player.getZ());
+            var player = mc != null ? mc.player : null; // log() is also called from worker threads
+            if (player != null)
+                pos = String.format(Locale.ROOT, "%.2f %.2f %.2f", player.getX(), player.getY(), player.getZ());
             if (MacroManager.INSTANCE.isPlaying()) lap = Integer.toString(MacroManager.INSTANCE.getLoopsDone() + 1);
             String line = TIME.format(now) + " | " + ms + " | " + type + " | " + clean(data) + " | pos " + pos
                     + " | круг " + lap;

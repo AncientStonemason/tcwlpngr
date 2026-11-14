@@ -63,8 +63,7 @@ public class MacroSettings {
         farm.sanitize();
         if (camera == null) camera = new CameraBinding();
         camera.refresh();
-        if (hold == null) hold = new HoldSettings();
-        hold.sort();
+        hold = HoldSettings.sanitize(hold);
         human = HumanSettings.sanitize(human);
         if (routeRandom == null) routeRandom = new RouteRandomSettings();
         routeRandom.sanitize();
