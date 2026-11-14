@@ -11,6 +11,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.*;
+import org.jspecify.annotations.Nullable;
 
 /** Explicit title-triggered, bounded local search. No warps, slots, chest clicks or loot ownership inference. */
 public final class SpecialZealotHunt {
@@ -28,7 +29,7 @@ public final class SpecialZealotHunt {
     private boolean pending, mouseSeen;
     private double mouseX, mouseY;
     private long lastNotice, started;
-    private ClientLevel world;
+    private @Nullable ClientLevel world;
     private Vec3 origin, lastPosition;
     private Mob target;
     private int point, legTicks, ticks, hiddenTicks;
@@ -91,6 +92,7 @@ public final class SpecialZealotHunt {
         state = State.IDLE;
         pending = false;
         target = null;
+        world = null;
         hiddenTicks = 0;
         if (owned) walker.stop(mc);
         status = "Special: " + why;

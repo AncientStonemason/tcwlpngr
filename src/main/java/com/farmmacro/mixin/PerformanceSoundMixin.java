@@ -1,5 +1,6 @@
 package com.farmmacro.mixin;
 
+import com.farmmacro.util.Guard;
 import com.farmmacro.visual.PerformanceMode;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.sounds.SoundSource;
@@ -12,6 +13,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class PerformanceSoundMixin {
     @Inject(method = "calculateVolume(FLnet/minecraft/sounds/SoundSource;)F", at = @At("RETURN"), cancellable = true)
     private void kaelix$volume(float volume, SoundSource source, CallbackInfoReturnable<Float> ci) {
-        ci.setReturnValue(PerformanceMode.worldVolume(ci.getReturnValueF(), source));
+        try {
+            ci.setReturnValue(PerformanceMode.worldVolume(ci.getReturnValueF(), source));
+        } catch (Throwable t) {
+            Guard.report("mixin/perf-sound", t); // ванильная громкость остаётся
+        }
     }
 }

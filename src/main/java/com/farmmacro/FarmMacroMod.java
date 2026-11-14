@@ -136,7 +136,10 @@ public class FarmMacroMod implements ClientModInitializer {
     public void onInitializeClient() {
         ModConfig.load();
         // 2.1.0: конфиг пишется в фоне — при выходе дождаться записи (и на случай выхода мимо CLIENT_STOPPING)
-        ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> ModConfig.flush());
+        ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> {
+            Guard.run("window/background-restore", () -> BackgroundWork.restore(mc));
+            ModConfig.flush();
+        });
         Runtime.getRuntime().addShutdownHook(new Thread(ModConfig::flush, "Kaelix-config-flush"));
         FishingMessages.load();
         FishingCommands.register();
@@ -185,16 +188,17 @@ public class FarmMacroMod implements ClientModInitializer {
         // v1.13: отключение от сервера во время макроса — паника; новый сервер — сброс замера лагов
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             boolean fishingWasActive = AutoFish.INSTANCE.active();
-            AutoFish.INSTANCE.stop("отключение");
+            Guard.run("fishing/disconnect", () -> AutoFish.INSTANCE.stop("отключение"));
             Guard.run("combat/disconnect", () -> AimAssist.INSTANCE.handoff("отключение"));
             Guard.run("panic/delayed-disconnect", () -> PanicDetector.INSTANCE.finishDelayed(client));
-            AutomationSafety.INSTANCE.clear();
-            CropFever.reset(client);
+            Guard.run("safety/disconnect", AutomationSafety.INSTANCE::clear);
+            Guard.run("fun/crop_fever-disconnect", () -> CropFever.reset(client));
+            Guard.run("window/background-disconnect", () -> BackgroundWork.restore(client));
             boolean playing = fishingWasActive
                     || MacroManager.INSTANCE.playingOrJustLost()
                             && (client.screen == null || client.screen instanceof ChatScreen);
             Guard.run("panic/disconnect", () -> PanicDetector.INSTANCE.onDisconnect(client, playing));
-            SilenceWatch.INSTANCE.reset();
+            Guard.run("panic/silence-disconnect", SilenceWatch.INSTANCE::reset);
         });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             LagGuard.INSTANCE.reset();

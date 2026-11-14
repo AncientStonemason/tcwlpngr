@@ -93,8 +93,8 @@ public final class NickHide {
         }
         int len = n[0];
         if (len < 2) return seq;
-        int[] exact = Arrays.copyOf(cps, len);
-        List<int[]> hits = NickText.find(exact, pr);
+        int[] exact = cps;
+        List<int[]> hits = NickText.find(exact, len, pr);
         if (hits.isEmpty()) return seq;
         List<Integer> oc = new ArrayList<>(len + 8);
         List<Style> os = new ArrayList<>(len + 8);
