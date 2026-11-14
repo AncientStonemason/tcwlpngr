@@ -46,6 +46,7 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
     private double scroll;
     private final DragWindow dragWindow = new DragWindow();
     private boolean modified;
+    private boolean finished;
     private String tooltip;
     private boolean wantHand;
 
@@ -378,7 +379,9 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
                 new Rows.Btn("Удалить точку", Rows.Style.DANGER, () -> {
                     if (!modified) RouteBuffer.INSTANCE.undoDrop();
                     RouteBuffer.INSTANCE.remove(index);
+                    if (modified) RouteBuffer.INSTANCE.undoDrop(); // снимок окна уже хранит состояние до правок
                     modified = true;
+                    finished = true;
                     minecraft.setScreen(parent);
                 }),
                 new Rows.Btn("Готово", Rows.Style.PRIMARY, this::onClose)));
@@ -426,7 +429,7 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
         tooltip = null;
         wantHand = false;
         if (pt() == null) {
-            minecraft.setScreen(parent);
+            onClose();
             return;
         }
         int x = wX(), y = wY(), w = wW(), h = wH();
@@ -463,6 +466,8 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
             for (var l : lines) tw = Math.max(tw, font.width(l));
             int tx = Math.min(mx + 10, width - tw - 14), ty = my + 12;
             if (ty + lines.size() * 10 + 8 > height - 4) ty = my - lines.size() * 10 - 10;
+            tx = Math.max(2, tx);
+            ty = Math.max(2, Math.min(ty, height - lines.size() * 10 - 10));
             Ui.roundBordered(g, tx, ty, tw + 12, lines.size() * 10 + 8, 4, Ui.TOOLTIP, Ui.BORDER);
             int ly = ty + 5;
             for (var l : lines) {
@@ -540,10 +545,19 @@ public class PointEditScreen extends Screen implements Rows.Ctx {
     }
 
     @Override
+    public void removed() {
+        Rows.clearWheelFocus();
+        Rows.blurText();
+        if (!modified && !finished) RouteBuffer.INSTANCE.undoDrop();
+        finished = true;
+    }
+
+    @Override
     public void onClose() {
         Rows.clearWheelFocus();
         Rows.blurText();
-        if (!modified) RouteBuffer.INSTANCE.undoDrop();
+        if (!modified && !finished) RouteBuffer.INSTANCE.undoDrop();
+        finished = true;
         minecraft.setScreen(parent);
     }
 

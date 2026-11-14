@@ -1,5 +1,6 @@
 package com.farmmacro.fun;
 
+import java.util.Arrays;
 import java.util.SplittableRandom;
 
 /** Pure, time-based cosmetic motion. No world input or player controls. */
@@ -8,16 +9,11 @@ public final class FeverMotion {
 
     public static Pose pose(long seed, long elapsedMs, int index, int screenW, int screenH, int w, int h) {
         double sec = Math.max(0, elapsedMs) / 1000.0;
-        var random = new SplittableRandom(seed ^ (0x9e3779b97f4a7c15L * (index + 1)));
-        double startX = random.nextDouble(), startY = random.nextDouble();
-        double speedX = random.nextDouble(.18, .34), speedY = random.nextDouble(.12, .25);
-        if (random.nextBoolean()) speedX = -speedX;
-        if (random.nextBoolean()) speedY = -speedY;
+        var params = params(seed, index);
+        double startX = params.startX(), startY = params.startY();
+        double speedX = params.speedX(), speedY = params.speedY();
         boolean running = index % 3 != 0, spinning = index % 3 == 2;
-        float angle = spinning
-                ? (float) Math.IEEEremainder(
-                        sec * random.nextDouble(.9, 2.1) * (random.nextBoolean() ? 1 : -1), Math.PI * 2)
-                : 0;
+        float angle = spinning ? (float) Math.IEEEremainder(sec * params.spin(), Math.PI * 2) : 0;
         double halfX = spinning ? Math.hypot(w, h) / 2.0 : w / 2.0;
         double halfY = spinning ? Math.hypot(w, h) / 2.0 : h / 2.0;
         double usableX = Math.max(0, screenW - 2 * halfX - 4), usableY = Math.max(0, screenH - 2 * halfY - 4);
@@ -36,6 +32,32 @@ public final class FeverMotion {
             ny = fy + (to.nextDouble() - fy) * u;
         }
         return new Pose(screenW / 2.0 + (nx - .5) * usableX, screenH / 2.0 + (ny - .5) * usableY, angle);
+    }
+
+    private record Params(double startX, double startY, double speedX, double speedY, double spin) {}
+
+    private static long cachedSeed;
+    private static Params[] cache = new Params[0];
+
+    private static synchronized Params params(long seed, int index) {
+        if (seed != cachedSeed) {
+            cachedSeed = seed;
+            cache = new Params[0];
+        }
+        if (index >= cache.length) cache = Arrays.copyOf(cache, Math.max(index + 1, cache.length * 2));
+        Params p = cache[index];
+        if (p == null) {
+            var random = new SplittableRandom(seed ^ (0x9e3779b97f4a7c15L * (index + 1)));
+            double startX = random.nextDouble(), startY = random.nextDouble();
+            double speedX = random.nextDouble(.18, .34), speedY = random.nextDouble(.12, .25);
+            if (random.nextBoolean()) speedX = -speedX;
+            if (random.nextBoolean()) speedY = -speedY;
+            double spin = 0;
+            if (index % 3 == 2) spin = random.nextDouble(.9, 2.1) * (random.nextBoolean() ? 1 : -1);
+            p = new Params(startX, startY, speedX, speedY, spin);
+            cache[index] = p;
+        }
+        return p;
     }
 
     private static double bounce(double value) {
