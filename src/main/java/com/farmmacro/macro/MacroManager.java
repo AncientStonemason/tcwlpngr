@@ -174,11 +174,6 @@ public class MacroManager {
     private boolean pendingResume, approachResume;
     /** REJOIN: какая точка маршрута была целью, когда сбили (для точки остановки, если возврат не удался). */
     private int rejoinResume;
-    /** v1.16.2: подход к старту — не нашёлся путь → стартовать с места (fallback), где/сколько, с какой точки. */
-    private boolean approachFallback;
-
-    private String approachWhere = "";
-    private double approachDist;
     private int approachIndex;
     private int rejoinsThisRun;
     /** Сколько раз за запуск можно вернуться после толчка (дальше — обычные «Сошёл с маршрута»/паника). */
@@ -642,21 +637,6 @@ public class MacroManager {
         MouseHold.INSTANCE.suspend(true);
         var st = approach.tick(mc, c);
         if (st == ReturnWalker.Status.RUNNING) return;
-        if (st == ReturnWalker.Status.FAIL
-                && approachKind == AP_START
-                && approachFallback
-                && approach.failedPlanning()) {
-            // v1.16.2: как до фонового поиска — без «Требовать точку старта» стартуем с места с предупреждением
-            approachKind = AP_NONE;
-            approachFallback = false;
-            if (approachResume) clearSavedPosition();
-            approachResume = false;
-            MouseHold.INSTANCE.suspend(false);
-            msg(mc, String.format(Locale.ROOT, "§6Путь до %s не найден: %s", approachWhere, approach.failText()));
-            msg(mc, String.format(Locale.ROOT, "§6Внимание: до %s %.1f бл", approachWhere, approachDist));
-            startPass(mc, Math.min(approachIndex, source.length() - 1));
-            return;
-        }
         if (st == ReturnWalker.Status.FAIL) {
             String what = approachKind == AP_REJOIN ? "Возврат на маршрут не удался" : "Не дошёл " + approach.what();
             finish(mc, "§c✖ " + what + ": " + approach.failText() + " — стоп", true);
@@ -749,6 +729,12 @@ public class MacroManager {
     }
 
     public void tickPlayback(Minecraft mc) {
+        if (state == State.RECORDING && (mc.player == null || mc.level == null)) {
+            // кадры остаются в буфере, но запись не продолжается в другом мире (скачок позиции)
+            setState(State.IDLE);
+            LOGGER.info("Запись остановлена: потерян мир ({} кадров)", frames.size());
+            return;
+        }
         if (NavigationInput.busy() && !NavigationInput.owns(approach)) return;
         if (state == State.COUNTDOWN) {
             tickCountdown(mc);
@@ -822,7 +808,6 @@ public class MacroManager {
                     source.stop(mc);
                     approachKind = AP_START;
                     approachResume = false;
-                    approachFallback = false;
                     approachIndex = 0;
                     MouseHold.INSTANCE.suspend(true);
                     approach.begin(
@@ -993,7 +978,7 @@ public class MacroManager {
         if (c.lagGuard && LagGuard.INSTANCE.lagging()) lagSkipUntil = i + c.stuckThresholdTicks;
         if (c.detectStuck && i >= lagSkipUntil) {
             int n = c.stuckThresholdTicks;
-            if (i - n >= passStartIndex) {
+            if (n > 0 && i - n >= passStartIndex) {
                 MacroFrame a = frames.get(i - n), b = frames.get(i);
                 double recorded = Math.hypot(b.x - a.x, b.z - a.z);
                 double actual = Math.hypot(actualX[i] - actualX[i - n], actualZ[i] - actualZ[i - n]);
@@ -1022,9 +1007,9 @@ public class MacroManager {
     }
 
     private void tickCountdown(Minecraft mc) {
-        if (mc.player == null) {
-            setState(State.IDLE);
-            releaseAll(mc);
+        if (mc.player == null || mc.level == null) { // вышли из мира во время отсчёта — без следов
+            EventLog.log("STOP", "мир потерян во время отсчёта");
+            stopInternal(mc, false);
             return;
         }
         if (countdownTicks > 0) {

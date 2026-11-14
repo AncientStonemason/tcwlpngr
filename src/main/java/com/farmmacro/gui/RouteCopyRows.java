@@ -18,7 +18,7 @@ final class RouteCopyRows {
                 () -> !rb.isEmpty() && !MacroManager.INSTANCE.isActive() && !MacroManager.INSTANCE.isRecording();
         rows.add(new Rows.Section("Копия и перенос маршрута").key("r.copy"));
         rows.add(new Rows.Note(
-                "Сохранит ОТДЕЛЬНЫЙ маршрут. X — восток/запад, Y — этаж, Z — юг/север; шаг1блок. Зеркало вокруг центра первого блока, камера/направления спуска отражаются вместе. Оригинал не меняется.",
+                "Сохранит ОТДЕЛЬНЫЙ маршрут. X — восток/запад, Y — этаж, Z — юг/север; шаг 1 блок. Зеркало вокруг центра первого блока, камера/направления спуска отражаются вместе. Оригинал не меняется.",
                 Ui.SUB));
         rows.add(new Rows.Number("Сдвиг X, блоков", null, () -> dx, v -> dx = (int) v, -4096, 4096, 1, 8, Rows::num)
                 .integer()
@@ -84,6 +84,11 @@ final class RouteCopyRows {
                                         @Override
                                         public boolean exists(String name) {
                                             return RouteStorage.INSTANCE.exists(name);
+                                        }
+
+                                        @Override
+                                        public boolean allowOverwrite() {
+                                            return false;
                                         }
 
                                         @Override

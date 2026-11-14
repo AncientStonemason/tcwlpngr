@@ -36,7 +36,7 @@ public final class RouteEditor {
 
     private static boolean active;
     private static int hover = -1;
-    private static int dragIndex = -1;
+    private static int dragIndex = -1, dragSize;
     private static boolean dragMoved;
     private static boolean undoWasDown, redoWasDown, selAllWasDown, dropWasDown;
     /** Стрелки: какая была нажата в прошлом тике, сколько тиков держится, когда был последний сдвиг (для Ctrl+Z одним шагом). */
@@ -109,6 +109,7 @@ public final class RouteEditor {
         if (h >= 0 && !shift) {
             RouteBuffer.INSTANCE.select(h);
             dragIndex = h;
+            dragSize = RouteBuffer.INSTANCE.size();
             dragMoved = false;
             return;
         }
@@ -156,6 +157,8 @@ public final class RouteEditor {
         LocalPlayer p = mc.player;
         if (p == null || mc.level == null) {
             active = false;
+            dragIndex = -1;
+            hover = -1;
             RouteRenderer.editorActive = false;
             RouteRenderer.editorHover = -1;
             RouteBuffer.INSTANCE.select(-1);
@@ -173,7 +176,11 @@ public final class RouteEditor {
         randomWasDown = random;
         // перетаскивание
         if (dragIndex >= 0) {
-            if (mc.screen != null || !mc.options.keyAttack.isDown() || RouteBuffer.INSTANCE.get(dragIndex) == null) {
+            // состав точек поменялся (удаление/вставка/отмена при зажатой ЛКМ) — индекс уже указывает на другую точку
+            if (mc.screen != null
+                    || !mc.options.keyAttack.isDown()
+                    || RouteBuffer.INSTANCE.size() != dragSize
+                    || RouteBuffer.INSTANCE.get(dragIndex) == null) {
                 dragIndex = -1;
             } else {
                 Vec3 at = targetPoint(mc);
@@ -279,6 +286,7 @@ public final class RouteEditor {
                 q.pauseTicks = 0;
                 q.jump = false;
                 q.drop = true;
+                q.pointAction = new PointAction();
                 q.dropDir = RoutePoint.DIR_AUTO;
                 int idx = rb.insertAt(i + 1, q);
                 if (idx < 0) {

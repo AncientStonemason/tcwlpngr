@@ -16,6 +16,7 @@ import com.farmmacro.panic.PanicDetector;
 import com.farmmacro.panic.PanicHandoff;
 import com.farmmacro.route.NavigationInput;
 import com.farmmacro.route.RouteEditor;
+import com.farmmacro.util.Clock;
 import com.farmmacro.window.BackgroundWork;
 import java.util.*;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.phys.Vec3;
 
 /** Attended, explicitly armed fishing. Adapted CC0 workflow; no executors/custom packets/camera/movement. */
@@ -59,7 +61,7 @@ public final class AutoFish {
     }
 
     private static long now() {
-        return System.nanoTime() / 1_000_000L;
+        return Clock.millis();
     }
 
     private FishingSettings config() {
@@ -176,11 +178,21 @@ public final class AutoFish {
         return identity(a).equals(identity(b));
     }
 
+    // Малый кэш: сравнение идёт каждый тик (рука, удочка, предмет Fireveil), копировать NBT каждый раз незачем.
+    private static final CustomData[] identityData = new CustomData[4];
+    private static final String[] identityText = new String[4];
+    private static int identityNext;
+
     private static String identity(ItemStack s) {
         var d = s.get(DataComponents.CUSTOM_DATA);
         if (d == null) return "";
+        for (int i = 0; i < identityData.length; i++) if (identityData[i] == d) return identityText[i];
         var e = d.copyTag().getCompoundOrEmpty("ExtraAttributes");
-        return e.getStringOr("id", "") + "/" + e.getStringOr("uuid", "");
+        String text = e.getStringOr("id", "") + "/" + e.getStringOr("uuid", "");
+        identityData[identityNext] = d;
+        identityText[identityNext] = text;
+        identityNext = (identityNext + 1) % identityData.length;
+        return text;
     }
 
     private FishingHook hook(Minecraft mc) {
