@@ -4,6 +4,7 @@ import com.farmmacro.FarmMacroMod;
 import com.farmmacro.config.ModConfig;
 import com.farmmacro.hud.FarmHud;
 import com.mojang.blaze3d.platform.NativeImage;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
 import java.util.*;
@@ -33,39 +34,36 @@ public final class CustomUiAssets {
         var mc = Minecraft.getInstance();
         IO.execute(() -> {
             Map<String, byte[]> images = new HashMap<>();
-            String error = "";
+            List<String> errors = new ArrayList<>();
             try {
                 Path dir = ModConfig.modDir().resolve("ui");
                 Files.createDirectories(dir.resolve("icons"));
-                if (!Files.exists(dir.resolve("README.txt")))
-                    Files.writeString(
-                            dir.resolve("README.txt"),
-                            "background.png — фон меню; hud.png — фон HUD; icons/<id>.png — значки HUD. PNG"
-                                    + " до 2 МБ и 2048×2048. После правки: Визуал → Перезагрузить изображения."
-                                    + " Id: status editor hold mouselock view human return delays susp panic"
-                                    + " server schedule nav.\n");
                 List<String> keys = new ArrayList<>(List.of("background", "hud"));
-                for (var b : FarmHud.BLOCKS) keys.add("icon_" + b.id());
+                List<String> ids = new ArrayList<>();
+                for (var b : FarmHud.BLOCKS) {
+                    keys.add("icon_" + b.id());
+                    ids.add(b.id());
+                }
+                String readme = "background.png — фон меню; hud.png — фон HUD; icons/<id>.png — значки HUD. PNG"
+                        + " до 2 МБ и 2048×2048. После правки: Визуал → Перезагрузить изображения."
+                        + " Id: " + String.join(" ", ids) + ".\n";
+                Path readmeFile = dir.resolve("README.txt");
+                if (!Files.exists(readmeFile) || !readme.equals(Files.readString(readmeFile)))
+                    Files.writeString(readmeFile, readme);
                 for (String key : keys) {
                     Path f = key.startsWith("icon_")
                             ? dir.resolve("icons").resolve(key.substring(5) + ".png")
                             : dir.resolve(key + ".png");
-                    if (!Files.exists(f)) continue;
-                    if (Files.size(f) > 2 * 1024 * 1024)
-                        throw new IllegalArgumentException(f.getFileName() + ": больше 2 МБ");
-                    byte[] bytes = Files.readAllBytes(f);
-                    if (bytes.length < 24 || ByteBuffer.wrap(bytes).getLong() != 0x89504E470D0A1A0AL)
-                        throw new IllegalArgumentException("Не PNG: " + f.getFileName());
-                    var head = ByteBuffer.wrap(bytes);
-                    int w = head.getInt(16), h = head.getInt(20);
-                    if (w < 1 || h < 1 || w > 2048 || h > 2048)
-                        throw new IllegalArgumentException("Размер PNG должен быть 1…2048");
-                    images.put(key, bytes);
+                    try {
+                        if (!Files.exists(f)) continue;
+                        images.put(key, readImage(f));
+                    } catch (IOException | RuntimeException e) {
+                        errors.add(describe(e, f.getFileName().toString()));
+                    }
                 }
-            } catch (Exception e) {
-                error = e.getMessage();
+            } catch (IOException | RuntimeException e) {
+                errors.add(describe(e, "ui"));
             }
-            String err = error;
             mc.execute(() -> {
                 if (gen != generation) return;
                 for (var t : textures.values()) mc.getTextureManager().release(t.id);
@@ -82,16 +80,36 @@ public final class CustomUiAssets {
                         mc.getTextureManager().register(id, texture);
                         textures.put(e.getKey(), new Texture(id, w, h));
                         texture = null;
-                    } catch (Exception ex) {
+                    } catch (IOException | RuntimeException ex) {
                         FarmMacroMod.LOGGER.warn("UI PNG {}: {}", e.getKey(), ex.toString());
+                        errors.add(describe(ex, e.getKey()));
                     } finally {
                         if (texture != null) texture.close();
                         if (img != null) img.close();
                     }
                 }
-                status = err.isEmpty() ? "Загружено: " + textures.size() : "Ошибка: " + err;
+                status = errors.isEmpty()
+                        ? "Загружено: " + textures.size()
+                        : "Загружено: " + textures.size() + " · ошибки: " + String.join("; ", errors);
             });
         });
+    }
+
+    private static byte[] readImage(Path f) throws IOException {
+        if (Files.size(f) > 2 * 1024 * 1024) throw new IllegalArgumentException("больше 2 МБ");
+        byte[] bytes = Files.readAllBytes(f);
+        if (bytes.length < 24 || ByteBuffer.wrap(bytes).getLong() != 0x89504E470D0A1A0AL)
+            throw new IllegalArgumentException("не PNG");
+        var head = ByteBuffer.wrap(bytes);
+        int w = head.getInt(16), h = head.getInt(20);
+        if (w < 1 || h < 1 || w > 2048 || h > 2048) throw new IllegalArgumentException("размер должен быть 1…2048");
+        return bytes;
+    }
+
+    /** Exception messages may be null; never let that reach the status line. */
+    private static String describe(Exception e, String what) {
+        String m = e.getMessage();
+        return what + ": " + (m == null || m.isBlank() ? e.getClass().getSimpleName() : m);
     }
 
     public static boolean draw(GuiGraphicsExtractor g, String name, int x, int y, int w, int h, int opacity) {

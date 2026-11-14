@@ -46,6 +46,7 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Util;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Главное меню мода. Свой интерфейс без текстур Minecraft: боковые вкладки, карточки настроек,
@@ -66,7 +67,26 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         "Combat / Hunting",
         "Клавиши"
     };
-    private static final String[] TAB_ICONS = {"⚠", "▶", "☰", "⌖", "◎", "✦", "⚙", "↗", "⊕", "⌨"};
+    private static final int[] TAB_ICONS = {
+        UiIcons.WARN,
+        UiIcons.PLAY,
+        UiIcons.RECORD,
+        UiIcons.PIN,
+        UiIcons.EYE,
+        UiIcons.STAR,
+        UiIcons.GEAR,
+        UiIcons.SLIDERS,
+        UiIcons.PLUS,
+        UiIcons.KEYBOARD
+    };
+    private static final int SAVE_DEBOUNCE_MS = 300;
+    private static boolean saveDirty;
+    private static long lastSaveMs = Long.MIN_VALUE / 2;
+    /** Arrow keys were used since the mouse last moved: only then a card shows the keyboard selection. */
+    private boolean keyboardNav;
+
+    private int statusIcon = UiIcons.INFO;
+    private double scrollGrab;
     private static int lastTab = 0; // вкладка запоминается между открытиями
 
     private final Screen parent;
@@ -135,6 +155,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         if (category == value) return;
         category = lastCategory = value;
         moduleSelection = 0;
+        keyboardNav = false;
         scroll = scrollTarget = 0;
         Rows.blurText();
         Rows.clearWheelFocus();
@@ -147,9 +168,11 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         visibleModules.clear();
         rows.add(new Rows.Buttons(
                 new Rows.Btn(
-                        "Редактор HUD", Rows.Style.SECONDARY, () -> minecraft.setScreen(new HudEditorScreen(this))),
-                new Rows.Btn("Все параметры", Rows.Style.SECONDARY, this::openAllSettings)));
-        rows.add(new Rows.Note("Enter — настройки · запуск отдельно", Ui.SUB));
+                        UiIcons.HUD,
+                        "Редактор HUD",
+                        Rows.Style.SECONDARY,
+                        () -> minecraft.setScreen(new HudEditorScreen(this))),
+                new Rows.Btn(UiIcons.SLIDERS, "Все параметры", Rows.Style.SECONDARY, this::openAllSettings)));
         String[] words = norm(search.query()).split("\\s+");
         int found = 0;
         for (var module : ModuleCatalog.ALL) {
@@ -167,7 +190,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         moduleSelection = index;
                         openModule(module);
                     },
-                    () -> moduleSelection == index));
+                    () -> keyboardNav && moduleSelection == index));
             found++;
         }
         moduleSelection = Math.clamp(moduleSelection, 0, Math.max(0, found - 1));
@@ -267,6 +290,10 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
 
     @Override
     protected void init() {
+        Rows.dragEnd();
+        Rows.clearWheelFocus();
+        draggingScrollbar = false;
+        draggingWindow = false;
         refreshLists();
         buildTab();
     }
@@ -283,9 +310,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
 
     private void switchTab(int t) {
         if (moduleTitle != null) return;
-        if (t == tab && search.query().isEmpty() && moduleTitle == null) return;
-        moduleSections = Set.of();
-        moduleTitle = null;
+        if (t == tab && search.query().isEmpty()) return;
         if (!search.query().isEmpty()) {
             search.clear();
             pendingRebuild = false;
@@ -308,7 +333,15 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         return ModConfig.INSTANCE;
     }
 
+    /** Writes at once unless a write just happened; the rest is flushed by the render tick, release and close. */
     static void save() {
+        if (Clock.millis() - lastSaveMs >= SAVE_DEBOUNCE_MS) flushSave();
+        else saveDirty = true;
+    }
+
+    private static void flushSave() {
+        saveDirty = false;
+        lastSaveMs = Clock.millis();
         ModConfig.save();
     }
 
@@ -347,7 +380,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         Rows.searching = false;
         rows.add(search);
         if (moduleTitle != null)
-            rows.add(new Rows.Buttons(new Rows.Btn("← Все модули", Rows.Style.SECONDARY, this::onClose)));
+            rows.add(new Rows.Buttons(new Rows.Btn(UiIcons.BACK, "Все модули", Rows.Style.SECONDARY, this::onClose)));
         int from = rows.size();
         buildContent(tab);
         filterModule(from);
@@ -615,6 +648,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                 0));
         rows.add(new Rows.Buttons(
                 new Rows.Btn(
+                                UiIcons.SAVE,
                                 () -> ConfigProfiles.exists(profileName) ? "Перезаписать" : "Сохранить текущие",
                                 () -> Rows.Style.PRIMARY,
                                 () -> {
@@ -623,21 +657,21 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                                     buildTab();
                                 })
                         .enabledIf(() -> ConfigProfiles.clean(profileName) != null),
-                new Rows.Btn("Папка", Rows.Style.SECONDARY, () -> {
+                new Rows.Btn(UiIcons.FOLDER, "Папка", Rows.Style.SECONDARY, () -> {
                     try {
                         Files.createDirectories(ConfigProfiles.dir());
                     } catch (Exception ignored) {
                     }
                     openFolder(ConfigProfiles.dir());
                 }),
-                new Rows.Btn("Обновить", Rows.Style.SECONDARY, this::buildTab)));
+                new Rows.Btn(UiIcons.REFRESH, "Обновить", Rows.Style.SECONDARY, this::buildTab)));
         rows.add(new Rows.Note(() -> profileMsg, Ui.ON));
         var list = ConfigProfiles.list();
         if (list.isEmpty()) rows.add(new Rows.Note("Профилей пока нет.", Ui.SUB));
         for (String name : list) {
             rows.add(new Rows.Note("● " + name, Ui.TEXT));
             rows.add(new Rows.Buttons(
-                    new Rows.Btn("Загрузить", Rows.Style.PRIMARY, () -> {
+                    new Rows.Btn(UiIcons.DOWNLOAD, "Загрузить", Rows.Style.PRIMARY, () -> {
                                 String err = ConfigProfiles.load(name);
                                 profileMsg = err != null ? err : "Загружен профиль «" + name + "»";
                                 refreshLists();
@@ -645,11 +679,12 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                             })
                             .enabledIf(() -> MacroManager.INSTANCE.getState() == MacroManager.State.IDLE)
                             .tip("Нельзя во время записи/воспроизведения"),
-                    new Rows.Btn("Перезаписать", Rows.Style.SECONDARY, () -> {
+                    new Rows.Btn(UiIcons.SAVE, "Перезаписать", Rows.Style.SECONDARY, () -> {
                         String err = ConfigProfiles.save(name);
                         profileMsg = err != null ? err : "Перезаписан «" + name + "» текущими настройками";
                     }),
                     new Rows.Btn(
+                            UiIcons.TRASH,
                             () -> name.equals(confirmProfileDelete) ? "Точно удалить?" : "Удалить",
                             () -> Rows.Style.DANGER,
                             () -> {
@@ -672,12 +707,12 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                 Ui.SUB));
         rows.add(
                 new Rows.Buttons(
-                        new Rows.Btn("Скопировать строку", Rows.Style.PRIMARY, () -> {
+                        new Rows.Btn(UiIcons.COPY, "Скопировать строку", Rows.Style.PRIMARY, () -> {
                             String code = ConfigProfiles.exportCode();
                             minecraft.keyboardHandler.setClipboard(code);
                             codeMsg = "Строка настроек скопирована (" + code.length() + " символов)";
                         }),
-                        new Rows.Btn("Вставить из буфера", Rows.Style.SECONDARY, () -> {
+                        new Rows.Btn(UiIcons.DOWNLOAD, "Вставить из буфера", Rows.Style.SECONDARY, () -> {
                                     String err = ConfigProfiles.importCode(minecraft.keyboardHandler.getClipboard());
                                     codeMsg = err != null ? err : "Настройки загружены из строки";
                                     if (err == null) {
@@ -759,11 +794,11 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         rows.add(new Rows.Section("Пресеты"));
         List<ModConfig.CamPreset> list = cfg().camPresets;
         if (list.isEmpty())
-            rows.add(new Rows.Note("Пока пусто. Встань как нужно и нажми «+ Новый из текущего взгляда».", Ui.SUB));
+            rows.add(new Rows.Note("Пока пусто. Встань как нужно и нажми «Новый из текущего взгляда».", Ui.SUB));
         for (int i = 0; i < list.size(); i++) rows.add(new CamCard(i));
         rows.add(
                 new Rows.Buttons(
-                        new Rows.Btn("+ Новый из текущего взгляда", Rows.Style.PRIMARY, () -> {
+                        new Rows.Btn(UiIcons.PLUS, "Новый из текущего взгляда", Rows.Style.PRIMARY, () -> {
                                     CameraPresets.addFromCurrent(minecraft);
                                     buildTab();
                                 })
@@ -931,7 +966,11 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         })
                         .enabledIf(has)
                         .tip("Округлить yaw до ближайших 45° — чтобы идти ровно вдоль ряда"),
-                new Rows.Btn("Применить", Rows.Style.SUCCESS, () -> CameraPresets.apply(minecraft, cfg().camSelected))
+                new Rows.Btn(
+                                UiIcons.CHECK,
+                                "Применить",
+                                Rows.Style.SUCCESS,
+                                () -> CameraPresets.apply(minecraft, cfg().camSelected))
                         .enabledIf(() -> has.getAsBoolean() && minecraft.player != null)
                         .tip("Повернуть камеру к пресету (как " + MacroManager.keyName(FarmMacroMod.keyCamApply)
                                 + ")")));
@@ -973,9 +1012,10 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     x + 8,
                     y + 6,
                     sel ? Ui.TEXT : Ui.SUB);
-            if (Rows.drawButton(c, g, b[0], y + 2, 22, 15, "◎", Rows.Style.SUCCESS, minecraft.player != null, mx, my))
+            if (Rows.drawButton(
+                    c, g, b[0], y + 2, 22, 15, "", UiIcons.EYE, Rows.Style.SUCCESS, minecraft.player != null, mx, my))
                 c.tooltip("Применить пресет: повернуть камеру");
-            if (Rows.drawButton(c, g, b[1], y + 2, 18, 15, "✕", Rows.Style.SECONDARY, true, mx, my))
+            if (Rows.drawButton(c, g, b[1], y + 2, 18, 15, "", UiIcons.TRASH, Rows.Style.SECONDARY, true, mx, my))
                 c.tooltip("Удалить пресет");
             if (hover && mx >= 0 && mx < b[0]) c.hand();
         }
@@ -1007,6 +1047,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
     private void buildMacros() {
         rows.add(new Rows.Section("Запись действий · дополнительная функция"));
         rows.add(new Rows.Buttons(new Rows.Btn(
+                        UiIcons.RECORD,
                         () -> MacroManager.INSTANCE.isRecording() ? "Остановить запись" : "Начать запись",
                         () -> MacroManager.INSTANCE.isRecording() ? Rows.Style.DANGER : Rows.Style.PRIMARY,
                         () -> {
@@ -1033,7 +1074,10 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         }
         rows.add(new Rows.Spacer(2));
         rows.add(new Rows.Buttons(new Rows.Btn(
-                "Открыть папку макросов", Rows.Style.SECONDARY, () -> openFolder(MacroStorage.MACRO_DIR))));
+                UiIcons.FOLDER,
+                "Открыть папку макросов",
+                Rows.Style.SECONDARY,
+                () -> openFolder(MacroStorage.MACRO_DIR))));
     }
 
     /** Вкладка «Маршруты»: текущий маршрут (точки), подсказка по редактору, автоход и редактор, сохранённые. */
@@ -1152,7 +1196,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         var rb = RouteBuffer.INSTANCE;
         rows.add(new Rows.Section("Маршрут по точкам").key("r.cur"));
         rows.add(new RouteBufferCard());
-        rows.add(new Rows.Buttons(new Rows.Btn("▶ Начать с места", Rows.Style.PRIMARY, () -> {
+        rows.add(new Rows.Buttons(new Rows.Btn(UiIcons.PLAY, "Начать с места", Rows.Style.PRIMARY, () -> {
                     minecraft.setScreen(null);
                     MacroManager.INSTANCE.startRouteHere(minecraft);
                 })
@@ -1191,12 +1235,12 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         + "в редакторе несохранённым; Ctrl+Z в редакторе вернёт прежний.",
                 Ui.SUB));
         rows.add(new Rows.Buttons(
-                new Rows.Btn("Копировать маршрут", Rows.Style.SECONDARY, () -> {
+                new Rows.Btn(UiIcons.COPY, "Копировать маршрут", Rows.Style.SECONDARY, () -> {
                             minecraft.keyboardHandler.setClipboard(RouteCode.encode(rb.route()));
                             routeClipMsg = "Скопировано: " + rb.size() + " точек";
                         })
                         .enabledIf(() -> !rb.isEmpty()),
-                new Rows.Btn("Вставить маршрут", Rows.Style.SECONDARY, () -> {
+                new Rows.Btn(UiIcons.DOWNLOAD, "Вставить маршрут", Rows.Style.SECONDARY, () -> {
                             try {
                                 var r = RouteCode.decode(minecraft.keyboardHandler.getClipboard());
                                 rb.importRoute(minecraft, r);
@@ -1228,7 +1272,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     RouteEditor.setActive(minecraft, true);
                     minecraft.setScreen(null);
                 }),
-                new Rows.Btn("Сохранить копией", Rows.Style.SECONDARY, () -> {
+                new Rows.Btn(UiIcons.SAVE, "Сохранить копией", Rows.Style.SECONDARY, () -> {
                             boolean ok = RouteVariants.saveCopy();
                             MacroManager.INSTANCE.msgPublic(
                                     minecraft,
@@ -1255,7 +1299,8 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         16,
                         v -> (int) v + " МБ")
                 .integer());
-        rows.add(new Rows.Buttons(new Rows.Btn("Очистить кэш", Rows.Style.SECONDARY, ChunkCache::clear)));
+        rows.add(
+                new Rows.Buttons(new Rows.Btn(UiIcons.TRASH, "Очистить кэш", Rows.Style.SECONDARY, ChunkCache::clear)));
         rows.add(new Rows.Section("Автоход и редактор").key("r.walk"));
         rows.add(number(
                 "Точка достигнута",
@@ -1308,8 +1353,8 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             for (var info : routes) rows.add(new RouteCard(info));
         }
         rows.add(new Rows.Spacer(2));
-        rows.add(new Rows.Buttons(
-                new Rows.Btn("Открыть папку маршрутов", Rows.Style.SECONDARY, () -> openFolder(RouteStorage.DIR))));
+        rows.add(new Rows.Buttons(new Rows.Btn(
+                UiIcons.FOLDER, "Открыть папку маршрутов", Rows.Style.SECONDARY, () -> openFolder(RouteStorage.DIR))));
     }
 
     // ── Окно «Настройки макроса» ─────────────────────────────────────────────
@@ -1327,7 +1372,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
 
     /** Кнопка ⚙ в правом верхнем углу карточки текущего макроса/маршрута. */
     private static boolean drawGear(Rows.Ctx c, GuiGraphicsExtractor g, int x, int y, boolean en, int mx, int my) {
-        return Rows.drawButton(c, g, x, y, 18, 16, "⚙", Rows.Style.SECONDARY, en, mx, my);
+        return Rows.drawButton(c, g, x, y, 18, 16, "", UiIcons.GEAR, Rows.Style.SECONDARY, en, mx, my);
     }
 
     private void saveRoute() {
@@ -1421,7 +1466,8 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     by,
                     bw,
                     16,
-                    RouteEditor.isActive() ? "✎ Закрыть" : "✎ Редактор",
+                    RouteEditor.isActive() ? "Закрыть" : "Редактор",
+                    UiIcons.PENCIL,
                     Rows.Style.PRIMARY,
                     idle,
                     mx,
@@ -1433,12 +1479,14 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     by,
                     bw,
                     16,
-                    active ? "■ Стоп" : "▶ Запустить",
+                    active ? "Стоп" : "Запустить",
+                    active ? UiIcons.STOP : UiIcons.PLAY,
                     active ? Rows.Style.DANGER : Rows.Style.SUCCESS,
                     has && (idle || active),
                     mx,
                     my);
-            Rows.drawButton(c, g, x + 16 + bw * 2, by, bw, 16, "Сохранить", Rows.Style.SECONDARY, has, mx, my);
+            Rows.drawButton(
+                    c, g, x + 16 + bw * 2, by, bw, 16, "Сохранить", UiIcons.SAVE, Rows.Style.SECONDARY, has, mx, my);
             Rows.drawButton(
                     c,
                     g,
@@ -1447,6 +1495,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     bw,
                     16,
                     confirm ? "Точно?" : "Очистить",
+                    UiIcons.TRASH,
                     confirm ? Rows.Style.DANGER : Rows.Style.SECONDARY,
                     has && idle,
                     mx,
@@ -1544,13 +1593,24 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             boolean idle = MacroManager.INSTANCE.getState() == MacroManager.State.IDLE;
             boolean confirming = key().equals(confirmDelete) && Clock.millis() < confirmUntil;
             int by = y + 5;
-            if (Rows.drawButton(c, g, bx[0], by, 22, 16, "▶", Rows.Style.SUCCESS, idle, mx, my))
+            if (Rows.drawButton(c, g, bx[0], by, 22, 16, "", UiIcons.PLAY, Rows.Style.SUCCESS, idle, mx, my))
                 c.tooltip("Загрузить и запустить");
-            if (Rows.drawButton(c, g, bx[3], by, 18, 16, "⚙", Rows.Style.SECONDARY, idle, mx, my))
+            if (Rows.drawButton(c, g, bx[3], by, 18, 16, "", UiIcons.GEAR, Rows.Style.SECONDARY, idle, mx, my))
                 c.tooltip("Настройки «" + info.name() + "»: камера, зажим мыши");
             if (confirming) {
                 Rows.drawButton(
-                        c, g, bx[1], by, bx[2] + 18 - bx[1], 16, "Точно удалить?", Rows.Style.DANGER, true, mx, my);
+                        c,
+                        g,
+                        bx[1],
+                        by,
+                        bx[2] + 18 - bx[1],
+                        16,
+                        "Точно удалить?",
+                        UiIcons.TRASH,
+                        Rows.Style.DANGER,
+                        true,
+                        mx,
+                        my);
             } else {
                 Rows.drawButton(
                         c,
@@ -1560,11 +1620,12 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         62,
                         16,
                         current ? "Загружен" : "Загрузить",
+                        current ? UiIcons.CHECK : UiIcons.DOWNLOAD,
                         Rows.Style.SECONDARY,
                         idle,
                         mx,
                         my);
-                if (Rows.drawButton(c, g, bx[2], by, 18, 16, "✕", Rows.Style.SECONDARY, true, mx, my))
+                if (Rows.drawButton(c, g, bx[2], by, 18, 16, "", UiIcons.TRASH, Rows.Style.SECONDARY, true, mx, my))
                     c.tooltip("Удалить «" + info.name() + "»");
             }
         }
@@ -1698,13 +1759,25 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     by,
                     bw,
                     16,
-                    active ? "■ Стоп" : "▶ Запустить",
+                    active ? "Стоп" : "Запустить",
+                    active ? UiIcons.STOP : UiIcons.PLAY,
                     active ? Rows.Style.DANGER : Rows.Style.SUCCESS,
                     has && !m.isRecording(),
                     mx,
                     my);
             Rows.drawButton(
-                    c, g, x + 12 + bw, by, bw, 16, "Сохранить", Rows.Style.PRIMARY, has && !m.isRecording(), mx, my);
+                    c,
+                    g,
+                    x + 12 + bw,
+                    by,
+                    bw,
+                    16,
+                    "Сохранить",
+                    UiIcons.SAVE,
+                    Rows.Style.PRIMARY,
+                    has && !m.isRecording(),
+                    mx,
+                    my);
             Rows.drawButton(
                     c,
                     g,
@@ -1713,6 +1786,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     bw,
                     16,
                     "Очистить",
+                    UiIcons.TRASH,
                     Rows.Style.SECONDARY,
                     has && !active && !m.isRecording(),
                     mx,
@@ -1793,9 +1867,9 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             boolean idle = MacroManager.INSTANCE.getState() == MacroManager.State.IDLE;
             boolean confirming = info.filename().equals(confirmDelete) && Clock.millis() < confirmUntil;
             int by = y + 5;
-            if (Rows.drawButton(c, g, bx[0], by, 22, 16, "▶", Rows.Style.SUCCESS, idle, mx, my))
+            if (Rows.drawButton(c, g, bx[0], by, 22, 16, "", UiIcons.PLAY, Rows.Style.SUCCESS, idle, mx, my))
                 c.tooltip("Загрузить и запустить");
-            if (Rows.drawButton(c, g, bx[3], by, 18, 16, "⚙", Rows.Style.SECONDARY, idle, mx, my))
+            if (Rows.drawButton(c, g, bx[3], by, 18, 16, "", UiIcons.GEAR, Rows.Style.SECONDARY, idle, mx, my))
                 c.tooltip("Настройки «" + info.name() + "»: камера, зажим мыши");
             if (confirming) {
                 Rows.drawButton(
@@ -1813,7 +1887,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         idle,
                         mx,
                         my);
-                if (Rows.drawButton(c, g, bx[2], by, 18, 16, "✕", Rows.Style.SECONDARY, true, mx, my))
+                if (Rows.drawButton(c, g, bx[2], by, 18, 16, "", UiIcons.TRASH, Rows.Style.SECONDARY, true, mx, my))
                     c.tooltip("Удалить «" + info.name() + "»");
             }
         }
@@ -1878,7 +1952,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         Ui.window(g, x, y, w, h, 8);
         // боковая панель
         Ui.round(g, x + 1, y + 1, sideW() + 7, h - 2, 8, Ui.SIDEBAR);
-        g.fill(x + sideW(), y, x + sideW() + 8, y + h, Ui.WINDOW);
+        g.fill(x + sideW(), y + 1, x + sideW() + 8, y + h - 1, Ui.WINDOW);
         g.fill(x + sideW(), y + 6, x + sideW() + 1, y + h - 6, Ui.BORDER);
     }
 
@@ -1891,6 +1965,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         float dt = lastFrameNs == 0 ? 0.016f : Math.min(0.1f, (now - lastFrameNs) / 1e9f);
         lastFrameNs = now;
         applyPending();
+        if (saveDirty && Clock.millis() - lastSaveMs >= SAVE_DEBOUNCE_MS) flushSave();
 
         int x = winX(), y = winY(), w = winW();
         if (moduleHome) {
@@ -1928,12 +2003,13 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
 
         // полоса прокрутки
         if (maxScroll > 0) {
-            int sx = cx + cw + 3;
-            int barH = Math.max(18, (int) ((double) ch * ch / total));
+            int sx = cx + cw + 2;
+            int barH = barHeight(ch, total);
             int barY = cy + (int) ((ch - barH) * (scroll / maxScroll));
-            Ui.pill(g, sx, cy, 3, ch, Ui.alpha(Ui.BORDER, 0.6f));
-            boolean hb = Ui.inside(mx, my, sx - 2, cy, 7, ch);
-            Ui.pill(g, sx, barY, 3, barH, hb || draggingScrollbar ? Ui.ACCENT_HI : Ui.ACCENT);
+            boolean hb = Ui.inside(mx, my, sx - 1, cy, SCROLLBAR_W + 2, ch);
+            Ui.pill(g, sx, cy, SCROLLBAR_W, ch, Ui.alpha(Ui.BORDER, hb || draggingScrollbar ? 0.9f : 0.6f));
+            Ui.pill(g, sx, barY, SCROLLBAR_W, barH, hb || draggingScrollbar ? Ui.ACCENT_HI : Ui.ACCENT);
+            if (hb) hand();
             // мягкое затухание у краёв (новый слой, иначе текст рисуется поверх градиента)
             g.nextStratum();
             if (scroll > 1)
@@ -1945,6 +2021,12 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
 
         if (wantHand) g.requestCursor(CursorTypes.POINTING_HAND);
         if (tooltip != null) drawTooltip(g, tooltip, mx, my);
+    }
+
+    private static final int SCROLLBAR_W = 5;
+
+    private static int barHeight(int ch, int total) {
+        return Math.min(ch, Math.max(18, (int) ((double) ch * ch / Math.max(1, total))));
     }
 
     private int contentHeight(int cw) {
@@ -1991,7 +2073,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
      * Заполняет Row.lx/ly/lw. @return высота содержимого
      */
     private int layout(int cw) {
-        boolean two = moduleTitle == null && cw >= 520;
+        boolean two = moduleTitle == null && cw >= MenuLayout.SETTINGS_TWO_COLUMNS_MIN;
         int colW = (cw - COL_GAP) / 2;
         int[] colY = {0, 0};
         int i = 0, n = rows.size();
@@ -2036,25 +2118,29 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         int col;
         switch (m.getState()) {
             case RECORDING -> {
-                status = "● ЗАПИСЬ " + MacroManager.formatTicks(m.getFrameCount());
+                status = "ЗАПИСЬ " + MacroManager.formatTicks(m.getFrameCount());
+                statusIcon = UiIcons.RECORD;
                 col = Ui.DANGER;
             }
             case COUNTDOWN -> {
                 status = m.getCountdownTicks() > 0
-                        ? "◷ СТАРТ ЧЕРЕЗ " + ((m.getCountdownTicks() + 19) / 20)
-                        : "◎ ПОВОРОТ КАМЕРЫ";
+                        ? "СТАРТ ЧЕРЕЗ " + ((m.getCountdownTicks() + 19) / 20)
+                        : "ПОВОРОТ КАМЕРЫ";
+                statusIcon = UiIcons.CLOCK;
                 col = Ui.WARN;
             }
             case PLAYING -> {
-                status = (m.isRoutePlaying() ? "▶ точка " + (m.getProgress() + 1) : "▶ " + m.getProgress()) + "/"
+                status = (m.isRoutePlaying() ? "точка " + (m.getProgress() + 1) : String.valueOf(m.getProgress())) + "/"
                         + m.getProgressTotal() + (cfg().loopEnabled ? " · круг " + (m.getLoopsDone() + 1) : "");
                 col = Ui.ON;
+                statusIcon = UiIcons.PLAY;
             }
             default -> {
                 boolean ready = m.getStartPosition() != null;
                 status = ready
-                        ? (m.getSourceKind() == MacroManager.SourceKind.ROUTE ? "■ ГОТОВ · МАРШРУТ" : "■ ГОТОВ")
-                        : "■ НЕТ МАКРОСА";
+                        ? (m.getSourceKind() == MacroManager.SourceKind.ROUTE ? "ГОТОВ · МАРШРУТ" : "ГОТОВ")
+                        : "НЕТ МАКРОСА";
+                statusIcon = ready ? UiIcons.CHECK : UiIcons.INFO;
                 col = ready ? Ui.SUB : Ui.DIM;
             }
         }
@@ -2078,11 +2164,12 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         modeX = bx - modeW - 8;
         int titleWidth = Math.max(10, modeX - hx - 8);
         Ui.heading(g, font, title(), hx, y + 10, titleWidth);
+        UiIcons.draw(g, statusIcon, hx, y + 29, 12, col == Ui.DIM ? Ui.DIM : col);
         Ui.text(
                 g,
                 font,
-                Ui.ellipsize(font, status.replaceFirst("^[■▶●◷◎] ?", ""), contW() - 26),
-                hx,
+                Ui.ellipsize(font, status, contW() - 40),
+                hx + 15,
                 y + 31,
                 col == Ui.DANGER || col == Ui.WARN ? col : Ui.SUB);
         boolean hp = Ui.inside(mx, my, modeX, y + 12, modeW, 20);
@@ -2104,7 +2191,13 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             hand();
             tooltip("Закрыть / назад · Esc");
         }
-        Ui.textCentered(g, font, "×", box.x() + 10, box.y() + 6, hover ? Ui.DANGER : Ui.SUB);
+        UiIcons.draw(
+                g,
+                UiIcons.CLOSE,
+                box.x() + (box.w() - 12) / 2,
+                box.y() + (box.h() - 12) / 2,
+                12,
+                hover ? Ui.DANGER : Ui.SUB);
     }
 
     /** v1.16.0 минималистичная боковая панель: логотип, вкладки текстом с тонкой полоской, внизу клавиши, ник и версия. */
@@ -2117,11 +2210,13 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             boolean active = i == tab;
             boolean hover = Ui.inside(mx, my, tx, ty, tw, th);
             if (active) g.fill(tx, ty + Math.min(4, th / 3), tx + 2, ty + th - Math.min(4, th / 3), Ui.ACCENT);
+            int icon = Math.min(12, tabStride() - 1), tint = active ? Ui.ACCENT_HI : hover ? Ui.TEXT : Ui.SUB;
+            UiIcons.draw(g, TAB_ICONS[i], tx + 8, ty + (th - icon) / 2, icon, tint);
             Ui.text(
                     g,
                     font,
-                    Ui.ellipsize(font, TABS[i], tw - 16),
-                    tx + 10,
+                    Ui.ellipsize(font, TABS[i], tw - 28),
+                    tx + 24,
                     ty + Math.max(0, (th - 8) / 2),
                     active ? Ui.TEXT : hover ? Ui.TEXT : Ui.SUB);
             if (hover && !active) hand();
@@ -2177,11 +2272,8 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         5,
                         active ? Ui.lerp(Ui.SIDEBAR, Ui.ACCENT, .13f) : Ui.CARD_HOVER);
             int ix = compact ? box.x() + (box.w() - 16) / 2 : box.x() + 8, iy = box.y() + (box.h() - 16) / 2;
-            if (i == 0) {
-                for (int yy = 0; yy < 2; yy++)
-                    for (int xx = 0; xx < 2; xx++)
-                        Ui.round(g, ix + xx * 8, iy + yy * 8, 6, 6, 1, active ? Ui.ACCENT_HI : Ui.SUB);
-            } else
+            if (i == 0) UiIcons.draw(g, UiIcons.GRID, ix, iy, active ? Ui.ACCENT_HI : Ui.SUB);
+            else
                 ModuleGlyphs.draw(
                         g,
                         switch (i) {
@@ -2241,8 +2333,9 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             if (active)
                 Ui.pill(g, tx, ty + Math.min(5, th / 3), 2, Math.max(1, th - 2 * Math.min(5, th / 3)), Ui.ACCENT);
             int col = active ? Ui.TEXT : hover ? Ui.TEXT : Ui.SUB;
-            Ui.textCentered(
-                    g, font, TAB_ICONS[i], tx + tw / 2, ty + Math.max(0, (th - 8) / 2), active ? Ui.ACCENT_HI : col);
+            int icon = Math.min(12, tabStride() - 1);
+            UiIcons.draw(
+                    g, TAB_ICONS[i], tx + (tw - icon) / 2, ty + (th - icon) / 2, icon, active ? Ui.ACCENT_HI : col);
             if (hover) tooltip(TABS[i]);
             if (hover && !active) hand();
             ty += tabStride();
@@ -2367,9 +2460,17 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         }
         // полоса прокрутки
         int cx = contX(), cy = contY(), cw = contW(), ch = contH();
-        if (Ui.inside(mx, my, cx + cw + 1, cy, 7, ch) && contentHeight(cw) > ch) {
-            draggingScrollbar = true;
-            dragScroll(my);
+        int total = contentHeight(cw);
+        if (e.button() == 0 && Ui.inside(mx, my, cx + cw + 1, cy, SCROLLBAR_W + 3, ch) && total > ch) {
+            int barH = barHeight(ch, total);
+            double maxScroll = total - ch;
+            double barY = cy + (ch - barH) * (scroll / maxScroll);
+            if (my < barY) scrollTarget -= ch * 0.9;
+            else if (my >= barY + barH) scrollTarget += ch * 0.9;
+            else {
+                draggingScrollbar = true;
+                scrollGrab = my - barY;
+            }
             return true;
         }
         // строки
@@ -2388,9 +2489,15 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         int cy = contY(), ch = contH();
         int total = contentHeight(contW());
         double maxScroll = Math.max(0, total - ch);
-        int barH = Math.max(18, (int) ((double) ch * ch / total));
-        double t = (my - cy - barH / 2.0) / Math.max(1, ch - barH);
+        int barH = barHeight(ch, total);
+        double t = (my - cy - scrollGrab) / Math.max(1, ch - barH);
         scrollTarget = scroll = Math.max(0, Math.min(maxScroll, t * maxScroll));
+    }
+
+    @Override
+    public void mouseMoved(double mx, double my) {
+        keyboardNav = false;
+        super.mouseMoved(mx, my);
     }
 
     @Override
@@ -2417,8 +2524,9 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         Rows.dragEnd();
         if (draggingWindow) {
             draggingWindow = false;
-            save();
+            saveDirty = true;
         }
+        if (saveDirty) flushSave();
         return super.mouseReleased(e);
     }
 
@@ -2436,12 +2544,10 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             scrollTarget -= sy * 24;
             return true;
         }
-        if (moduleTitle != null && Ui.inside(mx, my, winX(), winY(), sideW(), winH())) return true;
-        // колесо над вкладками — листать вкладки
+        // колесо над боковой панелью вкладки не переключает (легко задеть случайно) — просто листает список
         if (Ui.inside(mx, my, winX(), winY(), sideW(), winH())) {
-            if (moduleHome)
-                switchCategory(Math.floorMod(category + (sy > 0 ? -1 : 1), ModuleCatalog.CATEGORIES.length));
-            else switchTab(Math.floorMod(tab + (sy > 0 ? -1 : 1), TABS.length));
+            Rows.clearWheelFocus();
+            scrollTarget -= sy * 24;
             return true;
         }
         return super.mouseScrolled(mx, my, sx, sy);
@@ -2454,41 +2560,70 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             onClose();
             return true;
         }
+        if (e.hasControlDown() && e.key() == GLFW.GLFW_KEY_F) {
+            scrollTarget = 0;
+            search.focusField(this);
+            return true;
+        }
         if (moduleHome && !visibleModules.isEmpty()) {
-            if (e.key() >= 262 && e.key() <= 265) {
-                moduleSelection = MenuLayout.nextSelection(
-                        moduleSelection, visibleModules.size(), MenuLayout.columns(contW()), e.key());
-                contentHeight(contW());
-                int index = 0;
-                for (var row : rows)
-                    if (row instanceof ModuleCardRow) {
-                        if (index++ == moduleSelection) {
-                            scrollTarget = Math.max(0, row.ly - Math.max(0, contH() - MenuLayout.CARD_HEIGHT) / 2.0);
-                            break;
-                        }
-                    }
+            int key = e.key();
+            if (key == GLFW.GLFW_KEY_LEFT
+                    || key == GLFW.GLFW_KEY_RIGHT
+                    || key == GLFW.GLFW_KEY_UP
+                    || key == GLFW.GLFW_KEY_DOWN) {
+                if (keyboardNav)
+                    moduleSelection = MenuLayout.nextSelection(
+                            moduleSelection, visibleModules.size(), MenuLayout.columns(contW()), key);
+                keyboardNav = true;
+                revealSelection();
                 return true;
             }
-            if (e.key() == 257 || e.key() == 335) {
-                openModule(visibleModules.get(moduleSelection));
-                return true;
+            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                if (keyboardNav || visibleModules.size() == 1) {
+                    openModule(visibleModules.get(moduleSelection));
+                    return true;
+                }
             }
         }
-        if (e.key() == 258 && moduleTitle == null) { // Tab — следующая вкладка (Shift+Tab — предыдущая)
+        if (e.key() == GLFW.GLFW_KEY_TAB && moduleTitle == null) { // Tab — следующая вкладка (Shift+Tab — предыдущая)
             if (moduleHome)
                 switchCategory(Math.floorMod(category + (e.hasShiftDown() ? -1 : 1), ModuleCatalog.CATEGORIES.length));
             else switchTab(Math.floorMod(tab + (e.hasShiftDown() ? -1 : 1), TABS.length));
             return true;
         }
-        if (e.key() == 266) {
-            scrollTarget -= contH() * 0.8;
-            return true;
-        } // PageUp
-        if (e.key() == 267) {
-            scrollTarget += contH() * 0.8;
-            return true;
-        } // PageDown
+        switch (e.key()) {
+            case GLFW.GLFW_KEY_PAGE_UP -> {
+                scrollTarget -= contH() * 0.8;
+                return true;
+            }
+            case GLFW.GLFW_KEY_PAGE_DOWN -> {
+                scrollTarget += contH() * 0.8;
+                return true;
+            }
+            case GLFW.GLFW_KEY_HOME -> {
+                scrollTarget = 0;
+                return true;
+            }
+            case GLFW.GLFW_KEY_END -> {
+                scrollTarget = Double.MAX_VALUE / 4; // clamped on the next frame
+                return true;
+            }
+            default -> {}
+        }
         return super.keyPressed(e);
+    }
+
+    /** Scroll only when the selected card is not fully inside the viewport. */
+    private void revealSelection() {
+        contentHeight(contW());
+        int index = 0, ch = contH();
+        for (var row : rows) {
+            if (!(row instanceof ModuleCardRow) || index++ != moduleSelection) continue;
+            double top = row.ly - 4, bottom = row.ly + MenuLayout.CARD_HEIGHT + 4;
+            if (top < scrollTarget) scrollTarget = moduleSelection < MenuLayout.columns(contW()) ? 0 : Math.max(0, top);
+            else if (bottom > scrollTarget + ch) scrollTarget = bottom - ch;
+            return;
+        }
     }
 
     @Override
@@ -2508,12 +2643,23 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
     }
 
     @Override
+    public void removed() {
+        Rows.dragEnd();
+        Rows.clearWheelFocus();
+        Rows.blurText();
+        draggingScrollbar = false;
+        draggingWindow = false;
+        if (saveDirty) flushSave();
+        super.removed();
+    }
+
+    @Override
     public void onClose() {
         Rows.searching = false;
         Rows.clearWheelFocus();
         Rows.blurText();
         MacroManager.INSTANCE.saveSettingsIfDirty();
-        ModConfig.save();
+        flushSave();
         minecraft.setScreen(parent);
     }
 }

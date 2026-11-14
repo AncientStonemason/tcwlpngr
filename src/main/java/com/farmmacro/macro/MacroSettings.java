@@ -98,7 +98,7 @@ public class MacroSettings {
     public String summary(boolean route) {
         StringBuilder sb = new StringBuilder("Камера: ");
         if (!camera.active()) sb.append("как есть");
-        else if (CameraBinding.WHOLE.equals(camera.mode))
+        else if (CameraBinding.WHOLE.equals(camera.mode) && !camera.changes.isEmpty())
             sb.append(camera.changes.get(0).label());
         else sb.append(camera.changes.size()).append(" смен(ы) по ").append(route ? "точкам" : "кадрам");
         sb.append(" · Зажим: ");

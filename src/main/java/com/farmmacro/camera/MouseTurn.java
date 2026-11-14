@@ -82,6 +82,7 @@ public final class MouseTurn {
 
     /** Итог кратный 0.1° (±0.006°) — взять соседний шаг ближе к цели. */
     private long avoidRound(double from, long n, double want) {
+        if (want == 0) return 0;
         double end = from + n * step;
         double tenth = end * 10;
         if (Math.abs(tenth - Math.rint(tenth)) * 0.1 > 0.006) return n;
