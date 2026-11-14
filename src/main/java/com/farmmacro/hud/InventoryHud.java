@@ -18,7 +18,7 @@ final class InventoryHud {
         int h = 30 + cell * 4;
         if (g == null) return h;
         FarmHud.panel(g, x, y, w, h, Ui.ACCENT);
-        Ui.text(g, mc.font, Ui.ellipsize(mc.font, "ИНВЕНТАРЬ · 27 + 9", w - 16), x + 8, y + 6, StatsHud.fg());
+        HudUi.header(g, mc.font, x, y, w, "ИНВЕНТАРЬ · 27 + 9", Ui.ACCENT, StatsHud.fg());
         var inventory = mc.player.getInventory();
         for (int row = 0; row < 4; row++)
             for (int col = 0; col < 9; col++) {
