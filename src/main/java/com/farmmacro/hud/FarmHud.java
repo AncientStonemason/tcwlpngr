@@ -10,6 +10,7 @@ import com.farmmacro.fishing.AutoFish;
 import com.farmmacro.gui.CustomUiAssets;
 import com.farmmacro.gui.Rows;
 import com.farmmacro.gui.Ui;
+import com.farmmacro.gui.UiIcons;
 import com.farmmacro.gui.UiStyle;
 import com.farmmacro.macro.DelayModel;
 import com.farmmacro.macro.HandDelays;
@@ -35,6 +36,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.minecraft.client.Minecraft;
@@ -221,14 +223,13 @@ public final class FarmHud {
                     HudSlot sl = slot(b.id());
                     boolean hid = sl != null && sl.hidden;
                     if (g != null) {
-                        if (empty)
-                            Ui.text(g, f, Ui.ellipsize(f, b.label() + " — сейчас пусто", w - 14), 8, yy + 2, Ui.DIM);
+                        if (empty) Ui.text(g, f, Ui.ellipsize(f, b.label(), w - 14), 8, yy + 2, Ui.DIM);
                         else {
                             paintingSlot = sl;
                             paintingId = b.id();
                             safeDraw(b, g, mc, 0, yy, w);
                         }
-                        if (edit && hid) dimHidden(g, f, 0, yy, w, h);
+                        if (edit && hid) dimHidden(g, 0, yy, w, h);
                     }
                     out.add(new Rect(
                             b.id(),
@@ -247,7 +248,9 @@ public final class FarmHud {
             }
             return out;
         }
-        int stack = MARGIN, dashboardStack = MARGIN;
+        record Entry(Block b, HudSlot sl, boolean hid, int bw, int h, boolean empty, double sc, int pw, int ph) {}
+        List<Entry> entries = new ArrayList<>();
+        List<HudLayout.Item> flowItems = new ArrayList<>();
         for (Block b : BLOCKS) {
             if (!edit && (!groupVisible(b.id()) || !HudVisibility.show(b.id()))) continue;
             HudSlot sl = slot(b.id());
@@ -257,42 +260,45 @@ public final class FarmHud {
             int h = safeDraw(b, null, mc, 0, 0, bw);
             boolean empty = h <= 0;
             if (empty && !edit) continue;
-            if (empty) h = 15;
+            if (empty) {
+                // Editor-only chip: short label instead of a full-width "empty" panel.
+                h = CHIP_H;
+                bw = Math.min(bw, f.width(b.label()) + 20);
+            }
             double sc = (sl != null ? sl.scale : 1) * c.hudScale;
             int pw = (int) Math.round(bw * sc), ph = (int) Math.round(h * sc);
-            int x, y;
-            if (sl != null && sl.placed) {
-                int[] p = HudLayout.place(sl, pw, ph, sw, sh);
-                x = p[0];
-                y = p[1];
-            } else if (b.id().equals("inventory")) {
-                x = MARGIN;
-                y = Math.max(MARGIN, sh - ph - MARGIN);
-            } else if (DASHBOARD.contains(b.id())) {
-                x = MARGIN;
-                y = dashboardStack;
-                dashboardStack += ph + GAP;
-            } else {
-                x = sw - pw - MARGIN;
-                y = stack;
-                stack += ph + GAP;
-            }
-            out.add(new Rect(b.id(), b.label(), x, y, pw, ph, hid, false));
+            entries.add(new Entry(b, sl, hid, bw, h, empty, sc, pw, ph));
+            if (sl == null || !sl.placed)
+                flowItems.add(new HudLayout.Item(
+                        b.id(),
+                        pw,
+                        ph,
+                        b.id().equals("inventory")
+                                ? HudLayout.GROUP_BOTTOM_LEFT
+                                : DASHBOARD.contains(b.id()) ? HudLayout.GROUP_LEFT : HudLayout.GROUP_RIGHT));
+        }
+        Map<String, int[]> flow = HudLayout.flow(flowItems, sw, sh);
+        for (Entry e : entries) {
+            Block b = e.b();
+            HudSlot sl = e.sl();
+            int[] p = sl != null && sl.placed
+                    ? HudLayout.place(sl, e.pw(), e.ph(), sw, sh)
+                    : flow.getOrDefault(b.id(), new int[] {MARGIN, MARGIN});
+            int x = p[0], y = p[1];
+            out.add(new Rect(b.id(), b.label(), x, y, e.pw(), e.ph(), e.hid(), false));
             if (g == null) continue;
             Matrix3x2fStack pose = g.pose();
             pose.pushMatrix();
             try {
                 pose.translate(x, y);
-                pose.scale((float) sc, (float) sc);
-                if (empty) {
-                    Ui.round(g, 0, 0, bw, h, 5, Ui.alpha(Ui.HUD_BG, 0.72f));
-                    Ui.text(g, f, Ui.ellipsize(f, b.label() + " — сейчас пусто", bw - 14), 8, 4, Ui.DIM);
-                } else {
+                pose.scale((float) e.sc(), (float) e.sc());
+                if (e.empty()) chip(g, f, b.label(), e.bw(), e.h());
+                else {
                     paintingSlot = sl;
                     paintingId = b.id();
-                    safeDraw(b, g, mc, 0, 0, bw);
+                    safeDraw(b, g, mc, 0, 0, e.bw());
                 }
-                if (edit && hid) dimHidden(g, f, 0, 0, bw, h);
+                if (edit && e.hid()) dimHidden(g, 0, 0, e.bw(), e.h());
             } finally {
                 pose.popMatrix();
             }
@@ -300,15 +306,20 @@ public final class FarmHud {
         return out;
     }
 
-    private static void dimHidden(GuiGraphicsExtractor g, Font f, int x, int y, int w, int h) {
+    private static final int CHIP_H = 13;
+
+    /** Редактор: пустой блок — компактная пунктирная заглушка с названием. */
+    private static void chip(GuiGraphicsExtractor g, Font f, String label, int w, int h) {
+        Ui.round(g, 0, 0, w, h, 4, Ui.alpha(Ui.HUD_BG, 0.55f));
+        Ui.outline(g, 0, 0, w, h, 4, Ui.alpha(Ui.DIM, 0.45f));
+        Ui.text(g, f, Ui.ellipsize(f, label, w - 12), 6, 3, Ui.DIM);
+    }
+
+    /** Редактор: скрытый блок — затемнён, справа значок глаза. */
+    private static void dimHidden(GuiGraphicsExtractor g, int x, int y, int w, int h) {
         g.fill(x, y, x + w, y + h, 0xB0000000);
-        Ui.text(
-                g,
-                f,
-                "скрыто · ПКМ — показать",
-                x + w - f.width("скрыто · ПКМ — показать") - 4,
-                y + Math.max(0, h / 2 - 4),
-                Ui.WARN);
+        int icon = Math.min(12, Math.max(6, h - 2));
+        UiIcons.draw(g, UiIcons.EYE, x + w - icon - 3, y + (h - icon) / 2, icon, Ui.WARN);
     }
 
     /** A failing visual block cannot disable all remaining HUD elements. */
@@ -412,10 +423,10 @@ public final class FarmHud {
         int h = 24 + lines.size() * 11;
         if (g == null) return h;
         panel(g, x, y, w, h, 0xff65cce3);
-        Ui.text(g, mc.font, "РЫБАЛКА · ALPHA", x + 9, y + 5, StatsHud.fg());
+        HudUi.header(g, mc.font, x, y, w, "РЫБАЛКА · ALPHA", 0xff65cce3, StatsHud.fg());
         int yy = y + 21;
         for (var line : lines) {
-            Ui.text(g, mc.font, line, x + 9, yy, StatsHud.sub());
+            HudUi.row(g, mc.font, x, yy, w, line, StatsHud.sub(), StatsHud.fg());
             yy += 11;
         }
         return h;

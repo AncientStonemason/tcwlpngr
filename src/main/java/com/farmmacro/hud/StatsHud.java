@@ -182,11 +182,11 @@ public final class StatsHud {
             return h;
         }
         FarmHud.panel(g, x, y, w, h, color);
-        Ui.text(g, mc.font, Ui.ellipsize(mc.font, title, w - 18), x + 9, y + 6, fg());
+        HudUi.header(g, mc.font, x, y, w, title, color, fg());
         if (modern) g.fill(x + 9, y + 16, x + w - 9, y + 17, Ui.alpha(sub(), .16f));
         int yy = y + (modern ? 21 : 19), index = 0;
         for (String row : rows) {
-            Ui.text(g, mc.font, Ui.ellipsize(mc.font, row, w - 18), x + 9, yy, modern && index++ == 0 ? fg() : sub());
+            HudUi.row(g, mc.font, x, yy, w, row, modern && index++ == 0 ? fg() : sub(), fg());
             yy += 11;
         }
         if (Double.isFinite(progress)) {
