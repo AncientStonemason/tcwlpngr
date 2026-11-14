@@ -45,13 +45,17 @@ public class ReactionInputMixin {
 
     @Inject(method = "onScroll", at = @At("HEAD"))
     private void farmmacro$scrollBegin(long window, double horizontal, double vertical, CallbackInfo ci) {
-        Minecraft mc = Minecraft.getInstance();
-        boolean scrolled = horizontal != 0 || vertical != 0;
-        if (scrolled) PanicDetector.INSTANCE.finishDelayed(mc);
-        AutomationSafety.INSTANCE.manualScrollBegin(mc, window);
-        if (scrolled) {
-            AutoFish.INSTANCE.userInput();
-            SmoothTurn.bindingUserInput();
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            boolean scrolled = horizontal != 0 || vertical != 0;
+            if (scrolled) PanicDetector.INSTANCE.finishDelayed(mc);
+            AutomationSafety.INSTANCE.manualScrollBegin(mc, window);
+            if (scrolled) {
+                AutoFish.INSTANCE.userInput();
+                SmoothTurn.bindingUserInput();
+            }
+        } catch (Throwable t) {
+            Guard.report("mixin/scroll-begin", t);
         }
     }
 
@@ -59,12 +63,21 @@ public class ReactionInputMixin {
             method = "onScroll",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Inventory;setSelectedSlot(I)V"))
     private void farmmacro$manualScrollSlot(Inventory inventory, int slot) {
-        AutomationSafety.INSTANCE.selectLocalSlot(inventory, slot, true);
+        try {
+            AutomationSafety.INSTANCE.selectLocalSlot(inventory, slot, true);
+        } catch (Throwable t) {
+            Guard.report("mixin/scroll-slot", t);
+            inventory.setSelectedSlot(slot);
+        }
     }
 
     @Inject(method = "onScroll", at = @At("RETURN"))
     private void farmmacro$manualScrollDone(long window, double horizontal, double vertical, CallbackInfo ci) {
-        AutomationSafety.INSTANCE.manualScrollEnd();
+        try {
+            AutomationSafety.INSTANCE.manualScrollEnd();
+        } catch (Throwable t) {
+            Guard.report("mixin/scroll-end", t);
+        }
     }
 
     @Inject(method = "onButton", at = @At("HEAD"))

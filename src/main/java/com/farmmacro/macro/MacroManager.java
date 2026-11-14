@@ -749,6 +749,16 @@ public class MacroManager {
     }
 
     public void tickPlayback(Minecraft mc) {
+        boolean worldGone = mc.player == null || mc.level == null;
+        if (worldGone && NavigationInput.owns(approach)) approach.stop(mc); // не оставлять аренду навигации
+        if (worldGone && state == State.COUNTDOWN) {
+            countdownTicks = 0;
+            turnWaitTicks = 0;
+            setState(State.IDLE);
+            releaseAll(mc);
+            clearTransient();
+            return;
+        }
         if (NavigationInput.busy() && !NavigationInput.owns(approach)) return;
         if (state == State.COUNTDOWN) {
             tickCountdown(mc);
@@ -813,7 +823,12 @@ public class MacroManager {
             }
             boolean farmLoop = source == RouteWalker.INSTANCE && RouteWalker.INSTANCE.activeSettings().farm.enabled;
             if (ended || farmLoop) {
-                var first = RouteWalker.INSTANCE.activePoints().getFirst();
+                var activePts = RouteWalker.INSTANCE.activePoints();
+                if (activePts.isEmpty()) {
+                    finish(mc, "§a✔ Маршрут пройден", false);
+                    return;
+                }
+                var first = activePts.getFirst();
                 double dist = Math.sqrt(Math.pow(p.getX() - first.x, 2)
                         + Math.pow(p.getY() - first.y, 2)
                         + Math.pow(p.getZ() - first.z, 2));
@@ -1022,7 +1037,9 @@ public class MacroManager {
     }
 
     private void tickCountdown(Minecraft mc) {
-        if (mc.player == null) {
+        if (mc.player == null || mc.level == null) {
+            countdownTicks = 0;
+            turnWaitTicks = 0;
             setState(State.IDLE);
             releaseAll(mc);
             return;

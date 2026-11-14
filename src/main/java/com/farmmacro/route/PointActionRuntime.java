@@ -20,9 +20,16 @@ public final class PointActionRuntime {
     private boolean aimed, restoring;
     private float oldYaw, oldPitch;
     private int oldSlot;
+    private boolean slotTouched;
+    private long restoreStarted;
+    private static final long RESTORE_TIMEOUT_MS = 3000;
 
     public void cancel() {
         if (aimed || restoring) SmoothTurn.stop();
+        if (slotTouched) {
+            MacroManager.selectSlot(Minecraft.getInstance().player, oldSlot);
+            slotTouched = false;
+        }
         index = -1;
         clicked = -1;
         aimed = restoring = false;
@@ -30,6 +37,7 @@ public final class PointActionRuntime {
 
     public boolean tick(Minecraft mc, RoutePoint point, int idx, long seed) {
         var p = mc.player;
+        if (p == null) return false;
         long now = RouteEndRuntime.now();
         if (index != idx) {
             cancel();
@@ -74,11 +82,18 @@ public final class PointActionRuntime {
             case "item":
                 if (restoring) {
                     MacroManager.selectSlot(p, oldSlot);
-                    return !SmoothTurn.isActive() && p.getInventory().getSelectedSlot() == oldSlot;
+                    boolean restored = !SmoothTurn.isActive() && p.getInventory().getSelectedSlot() == oldSlot;
+                    if (!restored && now - restoreStarted > RESTORE_TIMEOUT_MS) {
+                        SmoothTurn.stop();
+                        restored = true;
+                    }
+                    if (restored) slotTouched = false;
+                    return restored;
                 }
                 boolean done = item(mc, point, now);
                 if (done && aimed) {
                     restoring = true;
+                    restoreStarted = now;
                     SmoothTurn.turnMouse(oldYaw, oldPitch, ModConfig.INSTANCE.returnTurnSpeed);
                     return false;
                 }
@@ -111,6 +126,7 @@ public final class PointActionRuntime {
                 }
         }
         if (slot < 0 || p.getInventory().getItem(slot).isEmpty()) return true;
+        slotTouched = true;
         MacroManager.selectSlot(p, slot);
         if (p.getInventory().getSelectedSlot() != slot) return now - started > 3000;
         if (!aimed) {

@@ -1,3 +1,4 @@
+    private boolean locationScan(Minecraft mc, ModConfig c) {
 package com.farmmacro.combat;
 
 import com.farmmacro.FarmMacroMod;
@@ -487,13 +488,44 @@ public final class AimAssist {
                             && name.equalsIgnoreCase("Enderman")
                             && mob.getType().getDescriptionId().endsWith(".enderman");
         if (!c.aimSelectedOnly) return true;
-        for (String n : c.aimMobNames) if (n.equalsIgnoreCase(name)) return true;
-        for (String n : c.aimExtraNames.split("[,;\\n]")) if (n.strip().equalsIgnoreCase(name)) return true;
-        return false;
+        return selectedNames(c).contains(name.toLowerCase(Locale.ROOT));
     }
+
+    private List<String> namesSource = List.of();
+    private String extraSource = "";
+    private Set<String> namesCache = Set.of();
+
+    private Set<String> selectedNames(ModConfig c) {
+        if (!c.aimExtraNames.equals(extraSource) || !c.aimMobNames.equals(namesSource)) {
+            Set<String> set = new HashSet<>();
+            for (String n : c.aimMobNames) set.add(n.toLowerCase(Locale.ROOT));
+            for (String n : c.aimExtraNames.split("[,;\\n]")) set.add(n.strip().toLowerCase(Locale.ROOT));
+            namesCache = set;
+            namesSource = new ArrayList<>(c.aimMobNames);
+            extraSource = c.aimExtraNames;
+        }
+        return namesCache;
+    }
+
+    private Object locLevel = new Object();
+    private long locTick = Long.MIN_VALUE;
+    private String locPreset = "";
+    private boolean locResult;
 
     private boolean location(Minecraft mc, ModConfig c) {
         if (!c.aimLimitLocation || c.aimPreset.equals("nearby")) return true;
+        if (mc.level == null) return locationScan(mc, c);
+        long tick = mc.level.getGameTime();
+        if (locLevel != mc.level || locTick != tick || !locPreset.equals(c.aimPreset)) {
+            locLevel = mc.level;
+            locTick = tick;
+            locPreset = c.aimPreset;
+            locResult = locationScan(mc, c);
+        }
+        return locResult;
+    }
+
+    private boolean locationScan(Minecraft mc, ModConfig c) {
         for (String line : PanicDetector.sidebar(mc))
             for (String place : MobCatalog.get(c.aimPreset).locations())
                 if (!place.isBlank() && line.toLowerCase(Locale.ROOT).contains(place.toLowerCase(Locale.ROOT)))
@@ -1161,7 +1193,7 @@ public final class AimAssist {
             return;
         }
         long now = System.nanoTime();
-        double dt = lastFrame == 0 ? 1 / 60.0 : (now - lastFrame) / 1e9;
+        double dt = lastFrame == 0 ? 1 / 60.0 : Math.min(.05, (now - lastFrame) / 1e9);
         lastFrame = now;
         float[] a = angles(eye, point, mc.player.getYRot());
         var d = DirectAimTurn.frame(

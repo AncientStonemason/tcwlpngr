@@ -81,6 +81,17 @@ public final class Pip {
             msg(mc, "§b▣ Картинка в картинке §7(" + MacroManager.keyName(FarmMacroMod.keyPip) + " — обычное окно)");
         } catch (Throwable t) {
             LOGGER.warn("Картинка в картинке не включилась", t);
+            if (!active) try {
+                GLFW.glfwSetWindowAttrib(h, GLFW.GLFW_FLOATING, wasFloating ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+                GLFW.glfwSetWindowAttrib(h, GLFW.GLFW_DECORATED, wasDecorated ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+                if (sw > 0 && sh > 0) {
+                    GLFW.glfwSetWindowSize(h, sw, sh);
+                    GLFW.glfwSetWindowPos(h, sx, sy);
+                }
+                if (wasMaximized) GLFW.glfwMaximizeWindow(h);
+            } catch (Throwable restoreFailure) {
+                LOGGER.warn("Не удалось откатить окно после сбоя PiP", restoreFailure);
+            }
             msg(mc, "§cКартинка в картинке не включилась: " + t.getClass().getSimpleName());
         }
     }
