@@ -22,6 +22,7 @@ public final class Terrain {
     public static final double FLOOR_GAP = 0.6;
     /** v1.11: сойти вниз без «Спуска» можно на блок (с бортика в воду, с грядки на дорожку). */
     public static final double STEP_DOWN = 1.0;
+    private static final double[] BLOCK_PROBES = {0.2, 1.0, 1.7};
 
     public enum Issue {
         OK(null),
@@ -53,7 +54,7 @@ public final class Terrain {
     /** Упирается ли игрок (ноги на высоте y) в блок в этой колонке: коллизия выше шага на уровне ног, тела или головы. */
     public static boolean blockedAt(Cells w, double x, double y, double z) {
         int cx = fl(x), cz = fl(z);
-        for (double dy : new double[] {0.2, 1.0, 1.7}) {
+        for (double dy : BLOCK_PROBES) {
             int cy = fl(y + dy);
             double t = w.top(cx, cy, cz);
             if (t >= 0 && cy + t > y + STEP) return true;

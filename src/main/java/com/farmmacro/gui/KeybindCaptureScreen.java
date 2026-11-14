@@ -50,6 +50,11 @@ public final class KeybindCaptureScreen extends Screen {
     }
 
     @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float delta) {
         super.extractRenderState(g, mx, my, delta);
         int w = Math.min(360, width - 16), h = 108, x = (width - w) / 2, y = (height - h) / 2;
