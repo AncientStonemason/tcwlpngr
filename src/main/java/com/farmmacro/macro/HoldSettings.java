@@ -54,7 +54,9 @@ public class HoldSettings {
 
     /** Для записи в режиме points: кадр index внутри какого-то участка. */
     public boolean inRange(int index) {
-        for (Range r : ranges) if (index >= Math.min(r.from, r.to) && index <= Math.max(r.from, r.to)) return true;
+        if (ranges == null) return false;
+        for (Range r : ranges)
+            if (r != null && index >= Math.min(r.from, r.to) && index <= Math.max(r.from, r.to)) return true;
         return false;
     }
 
@@ -74,12 +76,14 @@ public class HoldSettings {
         h.button = button;
         h.mode = mode;
         h.delayTicks = delayTicks;
-        for (Range r : ranges) h.ranges.add(r.copy());
+        if (ranges != null) for (Range r : ranges) if (r != null) h.ranges.add(r.copy());
         return h;
     }
 
     /** Порядок участков по началу (перед записью в файл). */
     public void sort() {
+        if (ranges == null) ranges = new ArrayList<>();
+        ranges.removeIf(Objects::isNull);
         for (Range r : ranges)
             if (r.from > r.to) {
                 int t = r.from;

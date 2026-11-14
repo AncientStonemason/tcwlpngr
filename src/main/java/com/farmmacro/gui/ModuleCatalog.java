@@ -6,7 +6,6 @@ import java.util.Set;
 /** UI-only catalogue. Opening a card never authorizes or starts its controller. */
 final class ModuleCatalog {
     static final String[] CATEGORIES = {"Все модули", "Фермы", "Combat", "Внешний вид", "Система"};
-    static final String[] ICONS = {"K", "F", "C", "V", "S"};
     /** {@code title}/{@code description} — русский текст по умолчанию; перевод — ключи farmmacro.module.&lt;id&gt;.* в lang. */
     record Module(
             int category, int tab, String id, String title, String description, String badge, Set<String> sections) {
@@ -29,6 +28,42 @@ final class ModuleCatalog {
     /** Название категории на языке игры (по умолчанию — русское из {@link #CATEGORIES}). */
     static String category(int i) {
         return Tr.t("farmmacro.category." + i, CATEGORIES[i]);
+    }
+
+    static Icon categoryIcon(int i) {
+        return switch (i) {
+            case 1 -> Icon.SPROUT;
+            case 2 -> Icon.SWORD;
+            case 3 -> Icon.EYE;
+            case 4 -> Icon.GEAR;
+            default -> Icon.GRID;
+        };
+    }
+
+    /** По id, а не по названию: название меняется вместе с языком. */
+    static Icon icon(Module module) {
+        return switch (module.id()) {
+            case "farms" -> Icon.ROUTE;
+            case "recording" -> Icon.RECORD;
+            case "launch" -> Icon.LAUNCH;
+            case "motion" -> Icon.MOTION;
+            case "combat" -> Icon.TARGET;
+            case "zealots" -> Icon.STAR;
+            case "combat_panic" -> Icon.SHIELD;
+            case "camera" -> Icon.CAMERA;
+            case "hud" -> Icon.LAYOUT;
+            case "economy" -> Icon.COINS;
+            case "theme" -> Icon.PALETTE;
+            case "route_display" -> Icon.WAYPOINT;
+            case "freecam" -> Icon.VIDEO;
+            case "cosmetics" -> Icon.SPARKLES;
+            case "panic_garden" -> Icon.SIREN;
+            case "keys" -> Icon.KEYBOARD;
+            case "configs" -> Icon.FOLDER;
+            case "fishing" -> Icon.FISH;
+            case "performance" -> Icon.GAUGE;
+            default -> Icon.GRID;
+        };
     }
 
     static final List<Module> ALL = List.of(
@@ -54,7 +89,7 @@ final class ModuleCatalog {
                     "Запись действий",
                     "Текущая запись и библиотека сохранённых макросов.",
                     "НАСТРОЙКИ",
-                    "Текущий макрос",
+                    "rec.cur",
                     "Сохранённые"),
             m(
                     1,
@@ -63,6 +98,7 @@ final class ModuleCatalog {
                     "Ручной запуск",
                     "Старт у точки, отсчёт, задержки рук и случайность.",
                     "НАСТРОЙКИ",
+                    "l.src",
                     "l.loop",
                     "l.stop",
                     "l.start",

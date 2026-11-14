@@ -66,7 +66,18 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         "Combat / Hunting",
         "Клавиши"
     };
-    private static final String[] TAB_ICONS = {"⚠", "▶", "☰", "⌖", "◎", "✦", "⚙", "↗", "⊕", "⌨"};
+    private static final Icon[] TAB_ICONS = {
+        Icon.SIREN,
+        Icon.LAUNCH,
+        Icon.MACRO,
+        Icon.ROUTE,
+        Icon.CAMERA,
+        Icon.EYE,
+        Icon.FOLDER,
+        Icon.MOTION,
+        Icon.SWORD,
+        Icon.KEYBOARD
+    };
     private static int lastTab = 0; // вкладка запоминается между открытиями
 
     private final Screen parent;
@@ -88,6 +99,10 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
     private boolean draggingScrollbar;
     private String tooltip;
     private boolean wantHand;
+    /** Сдвинулась ли мышь с прошлого кадра (выбор карточки идёт за мышью, но не мешает стрелкам). */
+    private boolean mouseMoved;
+
+    private int lastMouseX = Integer.MIN_VALUE, lastMouseY = Integer.MIN_VALUE;
 
     List<Rows.Choice> soundOptions = List.of();
     private List<MacroStorage.MacroInfo> macros = List.of();
@@ -145,11 +160,6 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         Rows.searching = false;
         rows.add(search);
         visibleModules.clear();
-        rows.add(new Rows.Buttons(
-                new Rows.Btn(
-                        "Редактор HUD", Rows.Style.SECONDARY, () -> minecraft.setScreen(new HudEditorScreen(this))),
-                new Rows.Btn("Все параметры", Rows.Style.SECONDARY, this::openAllSettings)));
-        rows.add(new Rows.Note("Enter — настройки · запуск отдельно", Ui.SUB));
         String[] words = norm(search.query()).split("\\s+");
         int found = 0;
         for (var module : ModuleCatalog.ALL) {
@@ -167,7 +177,11 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                         moduleSelection = index;
                         openModule(module);
                     },
-                    () -> moduleSelection == index));
+                    () -> moduleSelection == index,
+                    () -> {
+                        // Рамка выбора идёт за мышью, только пока мышь двигается: стрелки не перебиваются.
+                        if (mouseMoved) moduleSelection = index;
+                    }));
             found++;
         }
         moduleSelection = Math.clamp(moduleSelection, 0, Math.max(0, found - 1));
@@ -346,8 +360,6 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         }
         Rows.searching = false;
         rows.add(search);
-        if (moduleTitle != null)
-            rows.add(new Rows.Buttons(new Rows.Btn("← Все модули", Rows.Style.SECONDARY, this::onClose)));
         int from = rows.size();
         buildContent(tab);
         filterModule(from);
@@ -1005,14 +1017,14 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             List.of(new Rows.Choice("RECORDING", "Запись"), new Rows.Choice("ROUTE", "Маршрут по точкам"));
 
     private void buildMacros() {
-        rows.add(new Rows.Section("Запись действий · дополнительная функция"));
+        rows.add(new Rows.Section("Запись действий · дополнительная функция").key("rec.cur"));
         rows.add(new Rows.Buttons(new Rows.Btn(
                         () -> MacroManager.INSTANCE.isRecording() ? "Остановить запись" : "Начать запись",
                         () -> MacroManager.INSTANCE.isRecording() ? Rows.Style.DANGER : Rows.Style.PRIMARY,
                         () -> {
                             var m = MacroManager.INSTANCE;
                             if (m.isActive() && !m.isRecording()) return;
-                            onClose();
+                            closeMenu();
                             m.toggleRecording(minecraft);
                         })
                 .enabledIf(() -> !MacroManager.INSTANCE.isActive() || MacroManager.INSTANCE.isRecording())));
@@ -1157,7 +1169,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     MacroManager.INSTANCE.startRouteHere(minecraft);
                 })
                 .enabledIf(() -> rb.size() >= 2 && MacroManager.INSTANCE.getState() == MacroManager.State.IDLE)));
-        rows.add(new Rows.Number(
+        rows.add(number(
                 "Допуск старта с места",
                 "Расстояние до ближайшего отрезка; этаж учитывается. Не автовозврат к началу.",
                 () -> cfg().resumeAnywhereMaxDist,
@@ -1850,8 +1862,9 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                 c.clickSound();
                 var saved = MacroStorage.INSTANCE.load(info.filename());
                 if (saved == null) {
-                    minecraft.player.sendOverlayMessage(
-                            Component.literal("§c[FM] Не удалось прочитать файл макроса (подробности в логе)"));
+                    if (minecraft.player != null)
+                        minecraft.player.sendOverlayMessage(
+                                Component.literal("§c[FM] Не удалось прочитать файл макроса (подробности в логе)"));
                     return true;
                 }
                 if (MacroManager.INSTANCE.loadMacro(info.name(), saved.frames, saved.settings, minecraft) && mx < bx[1])
@@ -1887,6 +1900,9 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         super.extractRenderState(g, mx, my, delta);
         tooltip = null;
         wantHand = false;
+        mouseMoved = mx != lastMouseX || my != lastMouseY;
+        lastMouseX = mx;
+        lastMouseY = my;
         long now = System.nanoTime();
         float dt = lastFrameNs == 0 ? 0.016f : Math.min(0.1f, (now - lastFrameNs) / 1e9f);
         lastFrameNs = now;
@@ -2062,6 +2078,11 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         return col;
     }
 
+    private static String stripStatusIcon(String s) {
+        if (s.isEmpty() || "■▶●◷◎".indexOf(s.charAt(0)) < 0) return s;
+        return s.length() > 1 && s.charAt(1) == ' ' ? s.substring(2) : s.substring(1);
+    }
+
     private void renderHeader(GuiGraphicsExtractor g, int x, int y, int w, int mx, int my) {
         String[] fs = new String[1];
         int fc = statusOf(fs);
@@ -2081,7 +2102,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         Ui.text(
                 g,
                 font,
-                Ui.ellipsize(font, status.replaceFirst("^[■▶●◷◎] ?", ""), contW() - 26),
+                Ui.ellipsize(font, stripStatusIcon(status), contW() - 26),
                 hx,
                 y + 31,
                 col == Ui.DANGER || col == Ui.WARN ? col : Ui.SUB);
@@ -2104,7 +2125,62 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             hand();
             tooltip("Закрыть / назад · Esc");
         }
-        Ui.textCentered(g, font, "×", box.x() + 10, box.y() + 6, hover ? Ui.DANGER : Ui.SUB);
+        Icon.CLOSE.drawCentered(g, box.x(), box.y(), box.w(), box.h(), 10, hover ? Ui.DANGER : Ui.SUB);
+    }
+
+    /** Квадратная кнопка-иконка в заголовке; возвращает true, если под мышью. */
+    private boolean headerIcon(GuiGraphicsExtractor g, MenuLayout.Rect box, Icon icon, String label, int mx, int my) {
+        boolean hover = box.contains(mx, my);
+        Ui.roundBordered(
+                g,
+                box.x(),
+                box.y(),
+                box.w(),
+                box.h(),
+                5,
+                hover ? Ui.CARD_HOVER : Ui.CARD,
+                hover ? Ui.lerp(Ui.BORDER, Ui.SUB, .5f) : Ui.BORDER);
+        int color = hover ? Ui.ACCENT_HI : Ui.SUB;
+        if (box.w() <= 24) icon.drawCentered(g, box.x(), box.y(), box.w(), box.h(), 12, color);
+        else {
+            icon.draw(g, box.x() + 6, box.y() + (box.h() - 12) / 2, 12, color);
+            Ui.text(g, font, label, box.x() + 22, box.y() + (box.h() - 8) / 2, hover ? Ui.TEXT : Ui.SUB);
+        }
+        if (hover) hand();
+        return hover;
+    }
+
+    /** Кнопка «назад к каталогу» слева от заголовка модуля или списка всех параметров. */
+    private boolean hasBack() {
+        return !moduleHome && (moduleTitle != null || parent instanceof FarmMacroScreen);
+    }
+
+    private MenuLayout.Rect backBox() {
+        return new MenuLayout.Rect(contX(), winY() + 12, 20, 20);
+    }
+
+    private static final Icon[] HOME_ACTIONS = {Icon.LAYOUT, Icon.SLIDERS};
+
+    private static String homeActionLabel(int i) {
+        return i == 0
+                ? Tr.t("farmmacro.home.hud_editor", "Редактор HUD")
+                : Tr.t("farmmacro.home.all_settings", "Все параметры");
+    }
+
+    /** Кнопки каталога в заголовке (справа налево от крестика); в узком окне — только иконки. */
+    private MenuLayout.Rect homeAction(int i) {
+        boolean labels = contW() >= 400;
+        int right = geometry().close().x() - 6, y = winY() + 12;
+        for (int k = HOME_ACTIONS.length - 1; ; k--) {
+            int w = labels ? font.width(homeActionLabel(k)) + 28 : 20;
+            if (k == i) return new MenuLayout.Rect(right - w, y, w, 20);
+            right -= w + 4;
+        }
+    }
+
+    private void runHomeAction(int i) {
+        if (i == 0) minecraft.setScreen(new HudEditorScreen(this));
+        else openAllSettings();
     }
 
     /** v1.16.0 минималистичная боковая панель: логотип, вкладки текстом с тонкой полоской, внизу клавиши, ник и версия. */
@@ -2507,13 +2583,36 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         return true;
     }
 
-    @Override
-    public void onClose() {
+    private void flushEdits() {
         Rows.searching = false;
         Rows.clearWheelFocus();
         Rows.blurText();
         MacroManager.INSTANCE.saveSettingsIfDirty();
         ModConfig.save();
+    }
+
+    /** Закрыть всё меню целиком (не «назад» к каталогу модулей). */
+    private void closeMenu() {
+        flushEdits();
+        minecraft.setScreen(null);
+    }
+
+    @Override
+    public void onClose() {
+        flushEdits();
         minecraft.setScreen(parent);
+    }
+
+    /** Экран могли заменить не через onClose (другой мод, отключение): не оставляем ввод и перетаскивание висеть. */
+    @Override
+    public void removed() {
+        Rows.clearWheelFocus();
+        Rows.blurText();
+        Rows.dragEnd();
+        if (draggingWindow) {
+            draggingWindow = false;
+            save();
+        }
+        super.removed();
     }
 }

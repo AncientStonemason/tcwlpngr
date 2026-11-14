@@ -37,33 +37,39 @@ public final class CustomUiAssets {
             try {
                 Path dir = ModConfig.modDir().resolve("ui");
                 Files.createDirectories(dir.resolve("icons"));
-                if (!Files.exists(dir.resolve("README.txt")))
+                if (!Files.exists(dir.resolve("README.txt"))) {
+                    String ids = String.join(" ", FarmHud.BLOCKS.stream().map(FarmHud.Block::id).toList());
                     Files.writeString(
                             dir.resolve("README.txt"),
                             "background.png — фон меню; hud.png — фон HUD; icons/<id>.png — значки HUD. PNG"
                                     + " до 2 МБ и 2048×2048. После правки: Визуал → Перезагрузить изображения."
-                                    + " Id: status editor hold mouselock view human return delays susp panic"
-                                    + " server schedule nav.\n");
+                                    + " Id: " + ids + ".\n");
+                }
                 List<String> keys = new ArrayList<>(List.of("background", "hud"));
                 for (var b : FarmHud.BLOCKS) keys.add("icon_" + b.id());
                 for (String key : keys) {
-                    Path f = key.startsWith("icon_")
-                            ? dir.resolve("icons").resolve(key.substring(5) + ".png")
-                            : dir.resolve(key + ".png");
-                    if (!Files.exists(f)) continue;
-                    if (Files.size(f) > 2 * 1024 * 1024)
-                        throw new IllegalArgumentException(f.getFileName() + ": больше 2 МБ");
-                    byte[] bytes = Files.readAllBytes(f);
-                    if (bytes.length < 24 || ByteBuffer.wrap(bytes).getLong() != 0x89504E470D0A1A0AL)
-                        throw new IllegalArgumentException("Не PNG: " + f.getFileName());
-                    var head = ByteBuffer.wrap(bytes);
-                    int w = head.getInt(16), h = head.getInt(20);
-                    if (w < 1 || h < 1 || w > 2048 || h > 2048)
-                        throw new IllegalArgumentException("Размер PNG должен быть 1…2048");
-                    images.put(key, bytes);
+                    // Битый файл не мешает загрузке остальных: запоминаем первую ошибку и идём дальше.
+                    try {
+                        Path f = key.startsWith("icon_")
+                                ? dir.resolve("icons").resolve(key.substring(5) + ".png")
+                                : dir.resolve(key + ".png");
+                        if (!Files.exists(f)) continue;
+                        if (Files.size(f) > 2 * 1024 * 1024)
+                            throw new IllegalArgumentException(f.getFileName() + ": больше 2 МБ");
+                        byte[] bytes = Files.readAllBytes(f);
+                        if (bytes.length < 24 || ByteBuffer.wrap(bytes).getLong() != 0x89504E470D0A1A0AL)
+                            throw new IllegalArgumentException("Не PNG: " + f.getFileName());
+                        var head = ByteBuffer.wrap(bytes);
+                        int w = head.getInt(16), h = head.getInt(20);
+                        if (w < 1 || h < 1 || w > 2048 || h > 2048)
+                            throw new IllegalArgumentException(f.getFileName() + ": размер PNG должен быть 1…2048");
+                        images.put(key, bytes);
+                    } catch (Exception e) {
+                        if (error.isEmpty()) error = e.getMessage() != null ? e.getMessage() : e.toString();
+                    }
                 }
             } catch (Exception e) {
-                error = e.getMessage();
+                error = e.getMessage() != null ? e.getMessage() : e.toString();
             }
             String err = error;
             mc.execute(() -> {

@@ -6,8 +6,8 @@ public final class FreelookMath {
 
     /** @return {yaw, pitch} после движения мыши dx/dy (сырые единицы, как в LocalPlayer.turn). */
     public static float[] turn(float yaw, float pitch, double dx, double dy) {
-        float y = yaw + (float) (dx * 0.15);
-        float p = pitch + (float) (dy * 0.15);
+        float y = Double.isFinite(dx) ? yaw + (float) (dx * 0.15) : yaw;
+        float p = Double.isFinite(dy) ? pitch + (float) (dy * 0.15) : pitch;
         return new float[] {y, Math.max(-90f, Math.min(90f, p))};
     }
 }
