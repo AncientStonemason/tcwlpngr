@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "farmmacro",
+  "version": "${version}",
+  "name": "Kaelix",
+  "description": "Kaelix — attended waypoint routines with manual control, shared navigation and emergency stop",
+  "authors": [
+    "Vadik"
+  ],
+  "license": "GPL-3.0-only",
+  "icon": "assets/farmmacro/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.farmmacro.FarmMacroMod"
+    ]
+  },
+  "mixins": [
+    "farmmacro.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": ">=${fabric_version}",
+    "minecraft": "~${minecraft_version}"
+  }
+}

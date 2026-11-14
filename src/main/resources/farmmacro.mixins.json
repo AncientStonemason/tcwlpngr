@@ -1,0 +1,36 @@
+{
+  "required": true,
+  "package": "com.farmmacro.mixin",
+  "plugin": "com.farmmacro.util.mixin.KaelixMixinPlugin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "CameraTurnMixin",
+    "ConnectionSilenceMixin",
+    "EditorInputMixin",
+    "FreelookCameraMixin",
+    "FreelookMouseMixin",
+    "GameModeBreakMixin",
+    "LowRenderFrustumMixin",
+    "LowRenderRegionMixin",
+    "LowRenderSodiumMixin",
+    "MouseLockMixin",
+    "NickFontMixin",
+    "PanicGuiMixin",
+    "PanicPacketMixin",
+    "ReactionInputMixin",
+    "ReactionKeyMixin",
+    "UngrabAttackMixin",
+    "UngrabMixin",
+    "KaelixLoadingMixin",
+    "AimFrameMixin",
+    "CombatCrouchInputMixin",
+    "PerformanceFpsMixin",
+    "PerformanceParticlesMixin",
+    "PerformanceSoundMixin",
+    "NavigationSprintMixin",
+    "FreecamCameraMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
