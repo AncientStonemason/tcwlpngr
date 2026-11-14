@@ -23,7 +23,7 @@ public final class NickHide {
     private static volatile List<NickText.Pair> pairs = List.of();
     private static volatile boolean always;
     private static volatile int shotFrames;
-    private static Runnable shotTask;
+    private static volatile Runnable shotTask;
     private static String sig = "";
 
     /** Сейчас заменять (из потока отрисовки). */
@@ -129,8 +129,8 @@ public final class NickHide {
             task.run();
             return;
         }
-        shotTask = task;
         shotFrames = 2;
+        shotTask = task; // последним: onFrame видит задачу только вместе со счётчиком кадров
     }
 
     /** Каждый кадр (до отрисовки). */

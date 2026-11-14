@@ -65,5 +65,12 @@
   "farmmacro.module.fishing.desc": "Hooking, recasting and Fireveil for sea creatures.",
   "farmmacro.module.performance.title": "Performance",
   "farmmacro.module.performance.desc": "PERF, limits, step timings and a safe report/ZIP.",
-  "farmmacro.module.open_hint": "Opening does not start the module."
+  "farmmacro.module.open_hint": "Opening does not start the module.",
+  "farmmacro.header.back": "Back to module catalog",
+  "farmmacro.home.title": "Modules",
+  "farmmacro.home.found": "Found: %s · Enter — settings · start is separate",
+  "farmmacro.home.hud_editor": "HUD editor",
+  "farmmacro.home.hud_editor.tip": "HUD editor: position and size of the panels",
+  "farmmacro.home.all_settings": "All settings",
+  "farmmacro.home.all_settings.tip": "All settings by tab, with search across every setting"
 }

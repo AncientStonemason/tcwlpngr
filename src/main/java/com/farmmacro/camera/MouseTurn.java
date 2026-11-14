@@ -97,7 +97,7 @@ public final class MouseTurn {
     /** Кадр: сколько шагов повернуть сейчас {yaw, pitch}. dt — секунд с прошлого кадра. */
     public long[] frame(double dt) {
         if (finished) return new long[] {0, 0};
-        t += Math.max(0, dt);
+        if (dt > 0) t += dt; // NaN раньше навсегда застревал в t и поворот не заканчивался
         long wy, wp;
         if (t1 <= 0 || t >= t1 + t2) {
             wy = totalYaw;
