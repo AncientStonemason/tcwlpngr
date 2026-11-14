@@ -162,9 +162,10 @@ public final class RouteBuffer {
     }
 
     public boolean undo() {
-        marked.clear();
         PointRoute prev = undo.poll();
         if (prev == null) return false;
+        marked.clear();
+        prev.settings = route.settings; // отмена точек не откатывает более новые настройки
         redo.push(route.copy());
         while (redo.size() > UNDO_MAX) redo.removeLast();
         route = prev;
@@ -175,9 +176,10 @@ public final class RouteBuffer {
 
     /** 2.1.0: вернуть последнее отменённое изменение. */
     public boolean redo() {
-        marked.clear();
         PointRoute next = redo.poll();
         if (next == null) return false;
+        marked.clear();
+        next.settings = route.settings;
         undo.push(route.copy());
         while (undo.size() > UNDO_MAX) undo.removeLast();
         route = next;
@@ -202,6 +204,7 @@ public final class RouteBuffer {
         snapshot();
         marked.clear();
         MacroManager.INSTANCE.routeUnloaded();
+        capPoints(r);
         route = r;
         if (mc.level != null)
             route.dimension = mc.level.dimension().identifier().toString();
@@ -327,7 +330,7 @@ public final class RouteBuffer {
         snapshot();
         stamp(mc);
         route.points.clear();
-        route.points.addAll(pts);
+        route.points.addAll(pts.size() > MAX_POINTS ? pts.subList(0, MAX_POINTS) : pts);
         if (!pts.isEmpty() && mc.level != null) {
             route.dimension = dimensionId(mc);
             route.world = worldId(mc);
@@ -369,6 +372,7 @@ public final class RouteBuffer {
         marked.clear();
         MacroManager.INSTANCE.routeUnloaded();
         MacroManager.INSTANCE.showNav();
+        capPoints(r);
         route = r;
         defaultsApplied = true;
         loadedName = name;
@@ -378,6 +382,11 @@ public final class RouteBuffer {
         redo.clear();
         revision++;
         MacroManager.INSTANCE.useRouteSource();
+    }
+
+    static void capPoints(PointRoute r) {
+        if (r.points != null && r.points.size() > MAX_POINTS)
+            r.points.subList(MAX_POINTS, r.points.size()).clear();
     }
 
     public void markSaved(String name) {
