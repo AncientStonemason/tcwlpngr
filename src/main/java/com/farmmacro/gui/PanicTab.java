@@ -37,7 +37,8 @@ final class PanicTab {
                 () -> {
                     String r = PanicDetector.INSTANCE.getLastReason();
                     if (r == null) return "";
-                    long ago = (System.currentTimeMillis() - PanicDetector.INSTANCE.getLastPanicMs()) / 1000;
+                    long ago = Math.max(
+                            0, (System.currentTimeMillis() - PanicDetector.INSTANCE.getLastPanicMs()) / 1000);
                     return "Последняя паника " + (ago < 60 ? ago + " с" : ago / 60 + " мин") + " назад: " + r;
                 },
                 Ui.WARN));
@@ -63,7 +64,11 @@ final class PanicTab {
                         "Минимальная задержка стопа",
                         "Одна задержка на событие, повторы её не продлевают. Ручной ввод завершает остановку сразу.",
                         () -> FarmMacroScreen.cfg().farmPanicMinMs,
-                        v -> FarmMacroScreen.cfg().farmPanicMinMs = (int) v,
+                        v -> {
+                            var c = FarmMacroScreen.cfg();
+                            c.farmPanicMinMs = (int) v;
+                            c.farmPanicMaxMs = Math.max(c.farmPanicMaxMs, c.farmPanicMinMs);
+                        },
                         0,
                         1200,
                         50,
@@ -75,7 +80,10 @@ final class PanicTab {
                         "Максимальная задержка стопа",
                         "Не меньше минимальной; по умолчанию 350–750 мс. Никакого автоматического возобновления.",
                         () -> FarmMacroScreen.cfg().farmPanicMaxMs,
-                        v -> FarmMacroScreen.cfg().farmPanicMaxMs = (int) v,
+                        v -> {
+                            var c = FarmMacroScreen.cfg();
+                            c.farmPanicMaxMs = Math.max((int) v, c.farmPanicMinMs);
+                        },
                         0,
                         1200,
                         50,
@@ -341,7 +349,7 @@ final class PanicTab {
         BooleanSupplier bpsOn = () -> FarmMacroScreen.cfg().panicEnabled && FarmMacroScreen.cfg().detectBps;
         s.rows.add(s.toggle(
                         "Урожай не ломается (BPS)",
-                        "Только непрерывный сбор с ЛКМ+движением и наблюдавшимся урожаем. Навигация/песты/полёт/пауза/лаг сбрасывают окно; низкий BPS подтверждается20тиков",
+                        "Только непрерывный сбор с ЛКМ+движением и наблюдавшимся урожаем. Навигация/полёт/пауза/лаг сбрасывают окно; низкий BPS подтверждается 20 тиков",
                         () -> FarmMacroScreen.cfg().detectBps,
                         v -> FarmMacroScreen.cfg().detectBps = v)
                 .enabledIf(master));
@@ -376,7 +384,7 @@ final class PanicTab {
                 .enabledIf(master));
         s.rows.add(s.number(
                         "Ожидание Farming XP",
-                        "Прогрев40тиков, отсутствие текста заданное время +10тиков подтверждения. Пауза/лаг/переход сбрасывают наблюдение",
+                        "Прогрев 40 тиков, отсутствие текста заданное время +10 тиков подтверждения. Пауза/лаг/переход сбрасывают наблюдение",
                         () -> FarmMacroScreen.cfg().farmingXpMissingSec,
                         v -> FarmMacroScreen.cfg().farmingXpMissingSec = v,
                         3,
@@ -945,7 +953,7 @@ final class PanicTab {
                 .enabledIf(master));
         s.rows.add(s.toggle(
                         "Тишина сервера",
-                        "Ни одного пакета столько секунд — мод сам закрывает соединение, дальше как вылет (Переподключение)",
+                        "Ни одного пакета столько секунд — мод сам закрывает соединение, дальше как вылет: зайти заново нужно вручную",
                         () -> FarmMacroScreen.cfg().detectSilence,
                         v -> FarmMacroScreen.cfg().detectSilence = v)
                 .enabledIf(master));
@@ -977,8 +985,8 @@ final class PanicTab {
         s.rows.add(new Rows.TextField(
                         "API-ключ Hypixel",
                         "Хранится отдельно (hypixel-api-key.txt), в профили настроек не попадает",
-                        BanwaveWatch::key,
-                        BanwaveWatch::setKey,
+                        () -> BanwaveWatch.key().isEmpty() ? "" : KEY_MASK,
+                        v -> KEY_MASK.equals(v.strip()) || BanwaveWatch.setKey(v),
                         ch -> ch.matches("[0-9a-fA-F\\-]"),
                         36,
                         0)
@@ -1149,6 +1157,9 @@ final class PanicTab {
 
         buildReaction();
     }
+
+    /** Ключ Hypixel не показываем в поле (скриншоты/стрим); та же длина, что у UUID. */
+    private static final String KEY_MASK = "••••••••-••••-••••-••••-••••••••••••";
 
     private static final List<Rows.Choice> SOUND_OUT = List.of(
             new Rows.Choice("game", "Через игру (безопасно)"),
@@ -1435,7 +1446,7 @@ final class PanicTab {
                 .under(wh));
         s.rows.add(s.number(
                         "Антиспам одинаковых уведомлений",
-                        "15–3600 секунд. Общая отправка не чаще 5 с, очередь4; паника приоритетнее ожидающих статусов. Сообщения могут пропускаться",
+                        "15–3600 секунд. Общая отправка не чаще 5 с, очередь 4; паника приоритетнее ожидающих статусов. Сообщения могут пропускаться",
                         () -> FarmMacroScreen.cfg().webhookCooldownSec,
                         v -> FarmMacroScreen.cfg().webhookCooldownSec = (int) v,
                         15,
@@ -1449,7 +1460,7 @@ final class PanicTab {
                         new Rows.Btn("Сбросить ошибку Discord", Rows.Style.SECONDARY, DiscordNotify::resetError))
                 .under(wh));
         s.rows.add(new Rows.Note(
-                "Webhook хранится открытым текстом в отдельном локальном файле (POSIX 600, где доступно), не является хранилищем паролей. Токен/ID скрыты в поле, секреты/URL исключаются из переносимых настроек и журнала. HTTP429 ждёт Retry-After; 4xx блокирует до ручного сброса. Уже отправленный запрос отозвать нельзя.",
+                "Webhook хранится открытым текстом в отдельном локальном файле (POSIX 600, где доступно), не является хранилищем паролей. Токен/ID скрыты в поле, секреты/URL исключаются из переносимых настроек и журнала. HTTP 429 ждёт Retry-After; 4xx блокирует до ручного сброса. Уже отправленный запрос отозвать нельзя.",
                 Ui.SUB));
         s.rows.add(new Rows.Buttons(new Rows.Btn(
                         "Проверить",

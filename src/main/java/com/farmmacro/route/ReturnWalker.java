@@ -128,7 +128,7 @@ public final class ReturnWalker {
     }
 
     private int lastGoalUpdate = -100, goalUpdates;
-    /** Live target API for future pest module; call only with a verified target on the client thread. */
+    /** Сдвинуть единственную цель на лету (SpecialZealotHunt); только в клиентском потоке и с проверенной целью. */
     public boolean updateGoal(Minecraft mc, double x, double y, double z) {
         if (!active
                 || goals == null
@@ -294,18 +294,6 @@ public final class ReturnWalker {
         return p;
     }
 
-    /** Найти путь от игрока (без запуска) — для проверки «можно ли дойти». */
-    public static PathFinder.Result plan(Minecraft mc, List<PathFinder.Goal> goals) {
-        return plan(mc, goals, true);
-    }
-
-    public static PathFinder.Result plan(Minecraft mc, List<PathFinder.Goal> goals, boolean fly) {
-        PathJob j = PathJob.start(mc, goals, fly);
-        PathFinder.Result r = j.result();
-        logPlan(r, j);
-        return r;
-    }
-
     private static void logPlan(PathFinder.Result r, PathJob j) {
         EventLog.log(
                 "RETURN",
@@ -348,67 +336,6 @@ public final class ReturnWalker {
         cachedCells = Map.of();
         active = true;
         plan(mc, J_BEGIN, true);
-    }
-
-    /** Explicit loaded, verified flight corridor for a survey; no A* staircase, warps or physics edits.
-     * Bounded to 30 blocks so checks never extend into unseen terrain. */
-    public boolean beginFlightLeg(Minecraft mc, double x, double y, double z, String label) {
-        if (mc.player == null || mc.level == null || !canFly(mc.player)) return false;
-        var p = mc.player;
-        double length = Math.hypot(x - p.getX(), z - p.getZ());
-        if (length > 30 || Math.abs(y - p.getY()) > ModConfig.INSTANCE.returnFlyCeil) return false;
-        var w = new PathLevel(mc.level);
-        double cruise = Math.max(y, p.getY() + (p.getAbilities().flying ? 0 : 1.3));
-        for (int i = 0; i <= Math.ceil(length / .5); i++) {
-            double t = i / Math.max(1, Math.ceil(length / .5));
-            double cx = p.getX() + (x - p.getX()) * t, cz = p.getZ() + (z - p.getZ()) * t;
-            for (double ox : new double[] {-.35, .35})
-                for (double oz : new double[] {-.35, .35})
-                    if (!mc.level.hasChunk(((int) Math.floor(cx + ox)) >> 4, ((int) Math.floor(cz + oz)) >> 4))
-                        return false;
-        }
-        if (!NavigationMotion.airClear(w, p.getX(), p.getY(), p.getZ(), p.getX(), cruise, p.getZ(), .32)
-                || !NavigationMotion.airClear(w, p.getX(), cruise, p.getZ(), x, cruise, z, .32)
-                || !NavigationMotion.airClear(w, x, cruise, z, x, y, z, .32)) return false;
-        if (!acquireInput(mc)) return false;
-        release(mc.options);
-        if (job != null) {
-            job.cancel();
-            job = null;
-        }
-        startedLevel = mc.level;
-        previousX = p.getX();
-        previousY = p.getY();
-        previousZ = p.getZ();
-        goals = PathFinder.pointGoal(x, y, z, 0);
-        what = label;
-        recovery.clear();
-        replans = 0;
-        fail = null;
-        ticks = 0;
-        noFly = false;
-        failedPlanning = false;
-        active = true;
-        flightSwitch.reset();
-        doors.reset();
-        PathFinder.Result result = new PathFinder.Result();
-        result.ok = true;
-        result.goal = goals.getFirst();
-        if (cruise > p.getY() + .2 || !p.getAbilities().flying) {
-            RoutePoint up = new RoutePoint(p.getX(), cruise, p.getZ());
-            up.fly = true;
-            result.points.add(up);
-        }
-        RoutePoint across = new RoutePoint(x, cruise, z);
-        across.fly = true;
-        result.points.add(across);
-        if (y < cruise - .2) {
-            RoutePoint down = new RoutePoint(x, y, z);
-            down.fly = true;
-            result.points.add(down);
-        }
-        start(result, p, p.getYRot(), p.getXRot());
-        return true;
     }
 
     private void plan(Minecraft mc, int kind, boolean fly) {
@@ -479,6 +406,7 @@ public final class ReturnWalker {
         cachedWait = 0;
         // Remove grid stair-stepping only where the complete swept flight corridor is clear.
         var simplified = new ArrayList<RoutePoint>();
+        var flightWorld = new PathLevel(startedLevel);
         for (int i = 0; i < r.points.size(); i++) {
             RoutePoint from = r.points.get(i);
             simplified.add(from);
@@ -492,8 +420,7 @@ public final class ReturnWalker {
                 RoutePoint to = r.points.get(j);
                 if (!to.fly || to.climb || to.drop || to.jump || to.pointAction != null && to.pointAction.active())
                     break;
-                if (!NavigationMotion.airClear(
-                        new PathLevel(startedLevel), from.x, from.y, from.z, to.x, to.y, to.z, .32)) break;
+                if (!NavigationMotion.airClear(flightWorld, from.x, from.y, from.z, to.x, to.y, to.z, .32)) break;
                 far = j;
             }
             if (far > i + 1) i = far - 1;
@@ -561,6 +488,7 @@ public final class ReturnWalker {
         active = false;
         shaper = null;
         path = List.of();
+        startedLevel = null;
     }
 
     /** С какой точки маршрута (индекс) продолжать после возврата. */
