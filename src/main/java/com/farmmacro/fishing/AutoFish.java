@@ -176,11 +176,17 @@ public final class AutoFish {
         return identity(a).equals(identity(b));
     }
 
+    private static net.minecraft.world.item.component.CustomData identityKey;
+    private static String identityValue = "";
+
     private static String identity(ItemStack s) {
         var d = s.get(DataComponents.CUSTOM_DATA);
         if (d == null) return "";
+        if (d == identityKey) return identityValue;
         var e = d.copyTag().getCompoundOrEmpty("ExtraAttributes");
-        return e.getStringOr("id", "") + "/" + e.getStringOr("uuid", "");
+        identityValue = e.getStringOr("id", "") + "/" + e.getStringOr("uuid", "");
+        identityKey = d;
+        return identityValue;
     }
 
     private FishingHook hook(Minecraft mc) {

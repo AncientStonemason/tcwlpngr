@@ -21,6 +21,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Строки содержимого вкладок (немедленный режим: значения читаются из конфига при каждой отрисовке,
@@ -251,7 +252,6 @@ public final class Rows {
         @Override
         void render(Ctx c, GuiGraphicsExtractor g, int x, int y, int w, int mx, int my, boolean hover) {
             boolean col = collapsible(), op = open();
-            String t = (col ? (op ? "▾ " : "▸ ") : onClick != null ? "› " : "") + title.toUpperCase();
             boolean hot = hover && (col || onClick != null);
             renderFlat(c, g, x, y, w, hot, col, op);
         }
@@ -262,8 +262,14 @@ public final class Rows {
             Font f = c.font();
             int tx = x + 2, ty = y + 10;
             if (col || onClick != null) {
-                Ui.text(g, f, col ? (op ? "-" : "+") : "›", tx, ty, hot ? Ui.SUB : Ui.DIM);
-                tx += f.width("+") + 4;
+                UiIcons.draw(
+                        g,
+                        col ? (op ? UiIcons.CHEVRON_DOWN : UiIcons.CHEVRON_RIGHT) : UiIcons.CHEVRON_RIGHT,
+                        tx - 2,
+                        ty - 2,
+                        12,
+                        hot ? Ui.SUB : Ui.DIM);
+                tx += 12;
             }
             String right = null;
             if (col) {
@@ -283,13 +289,12 @@ public final class Rows {
             String label = Ui.ellipsize(f, title, Math.max(8, x + w - tx - reserve));
             Ui.text(g, f, label, tx, ty, hot ? Ui.TEXT : Ui.SUB);
             if (right != null) Ui.textRight(g, f, right, x + w - 2, ty, Ui.DIM);
-            if (hot && !label.equals(title)) c.tooltip(title);
             if (hot) {
                 c.hand();
-                c.tooltip(
-                        onClick != null
-                                ? "Открыть вкладку с этим разделом"
-                                : op ? "Свернуть раздел" : "Развернуть раздел");
+                String action = onClick != null
+                        ? "Открыть вкладку с этим разделом"
+                        : op ? "Свернуть раздел" : "Развернуть раздел";
+                c.tooltip(label.equals(title) ? action : title + " — " + action);
             }
         }
 
@@ -328,9 +333,9 @@ public final class Rows {
         }
 
         private String text() {
-            if (advanced.getAsBoolean()) return "▴ Скрыть тонкие настройки (простой режим)";
+            if (advanced.getAsBoolean()) return "Скрыть тонкие настройки (простой режим)";
             int n = hidden.getAsInt();
-            return n <= 0 ? "" : "▾ Ещё " + n + " " + Section.plural(n) + " — показать все (расширенный режим)";
+            return n <= 0 ? "" : "Ещё " + n + " " + Section.plural(n) + " — показать все (расширенный режим)";
         }
 
         @Override
@@ -346,7 +351,17 @@ public final class Rows {
         @Override
         void render(Ctx c, GuiGraphicsExtractor g, int x, int y, int w, int mx, int my, boolean hover) {
             String t = text();
-            Ui.textCentered(g, c.font(), Ui.ellipsize(c.font(), t, w - 12), x + w / 2, y + 6, hover ? Ui.TEXT : Ui.DIM);
+            int color = hover ? Ui.TEXT : Ui.DIM;
+            String s = Ui.ellipsize(c.font(), t, w - 12 - 14);
+            int left = x + (w - 14 - c.font().width(s)) / 2;
+            UiIcons.draw(
+                    g,
+                    advanced.getAsBoolean() ? UiIcons.CHEVRON_DOWN : UiIcons.CHEVRON_RIGHT,
+                    left,
+                    y + 4,
+                    12,
+                    color);
+            Ui.text(g, c.font(), s, left + 14, y + 6, color);
             if (hover) {
                 c.hand();
                 c.tooltip("Пороги, веса, цвета и служебные шаги. Тот же переключатель — вверху окна");
@@ -886,6 +901,41 @@ public final class Rows {
             set("");
         }
 
+        /** Ctrl+F: поставить фокус в поле поиска. */
+        void focusField(Ctx c) {
+            if (!focused()) focus(c);
+        }
+
+        @Override
+        int leftPad() {
+            return 18;
+        }
+
+        @Override
+        int rightPad() {
+            return 18;
+        }
+
+        private boolean hasText() {
+            return focused() ? !buf.isEmpty() : !query.isEmpty();
+        }
+
+        private boolean overClear(double mx, double my, int cx, int cy, int cw) {
+            return hasText() && Ui.inside(mx, my, cx + cw - 16, cy, 16, 15);
+        }
+
+        private void drawIcons(Ctx c, GuiGraphicsExtractor g, int cx, int cy, int cw, int mx, int my) {
+            UiIcons.draw(g, UiIcons.SEARCH, cx + 4, cy + 1, 12, focused() ? Ui.ACCENT_HI : Ui.DIM);
+            if (hasText()) {
+                boolean hx = overClear(mx, my, cx, cy, cw);
+                UiIcons.draw(g, UiIcons.CLOSE, cx + cw - 15, cy + 1, 12, hx ? Ui.DANGER : Ui.SUB);
+                if (hx) {
+                    c.hand();
+                    c.tooltip("Очистить поиск");
+                }
+            }
+        }
+
         private void set(String q) {
             if (!q.equals(query)) {
                 query = q;
@@ -931,7 +981,7 @@ public final class Rows {
 
         @Override
         String editTip() {
-            return "На главной — поиск модулей; в настройках — параметров · Esc — выйти из поля, ✕ — очистить";
+            return "На главной — поиск модулей; в настройках — параметров · Esc — выйти из поля, × — очистить";
         }
 
         @Override
@@ -940,17 +990,15 @@ public final class Rows {
             if (focused()) {
                 if (!buf.strip().equals(query)) set(buf.strip());
                 drawEditing(c, g, cx, cy, cw, hover);
+                drawIcons(c, g, cx, cy, cw, mx, my);
                 return;
             }
             boolean hf = Ui.inside(mx, my, cx, cy, cw, 14);
             Ui.roundBordered(g, cx, cy, cw, 15, 4, Ui.FIELD, hf ? Ui.SUB : Ui.BORDER);
-            if (query.isEmpty()) Ui.text(g, c.font(), "Поиск…", cx + 6, cy + 3, Ui.DIM);
-            else {
-                Ui.text(g, c.font(), Ui.ellipsize(c.font(), query, cw - 30), cx + 6, cy + 3, Ui.TEXT);
-                boolean hx = Ui.inside(mx, my, cx + cw - 16, cy, 16, 14);
-                Ui.textCentered(g, c.font(), "✕", cx + cw - 8, cy + 3, hx ? Ui.DANGER : Ui.SUB);
-                if (hx) c.tooltip("Очистить поиск");
-            }
+            int avail = cw - leftPad() - rightPad();
+            if (query.isEmpty()) Ui.text(g, c.font(), Ui.ellipsize(c.font(), "Поиск…", avail), cx + 18, cy + 3, Ui.DIM);
+            else Ui.text(g, c.font(), Ui.ellipsize(c.font(), query, avail), cx + 18, cy + 3, Ui.TEXT);
+            drawIcons(c, g, cx, cy, cw, mx, my);
             if (hf) c.hand();
         }
 
@@ -959,9 +1007,13 @@ public final class Rows {
             if (button != 0) return false;
             int cx = lastX + 2, cy = lastY + 3, cw = lastW - 4;
             if (!Ui.inside(mx, my, cx, cy, cw, 14)) return false;
-            if (!focused() && !query.isEmpty() && Ui.inside(mx, my, cx + cw - 16, cy, 16, 14)) {
+            if (overClear(mx, my, cx, cy, cw)) {
                 c.clickSound();
-                clear();
+                if (focused()) {
+                    buf = "";
+                    cursor = 0;
+                    set("");
+                } else clear();
                 return true;
             }
             if (!focused()) focus(c);
@@ -1003,7 +1055,7 @@ public final class Rows {
             int h = height(c, w);
             drawCard(c, g, x, y, w, h, hover, false);
             int cw = controlWidth(c);
-            int cx = x + w - cw - 2, cy = hintShown() ? y + 3 : y + (h - 1 - 14) / 2;
+            int cx = ctrlX(x, w, cw), cy = ctrlY(y, h);
             boolean en = on();
             boolean hl = en && Ui.inside(mx, my, cx, cy, cw / 2, 14);
             boolean hr = en && Ui.inside(mx, my, cx + cw / 2, cy, cw - cw / 2, 14);
@@ -1014,6 +1066,15 @@ public final class Rows {
             Ui.text(g, c.font(), s, cx + cw - 10 - sw, cy + 3, en ? (hl || hr ? Ui.TEXT : Ui.SUB) : Ui.DIM);
             Ui.text(g, c.font(), "‹", cx + cw - 18 - sw, cy + 3, hl ? Ui.ACCENT_HI : Ui.DIM);
             if (hl || hr) c.hand();
+        }
+
+        /** Один прямоугольник управления и для отрисовки, и для попаданий мыши. */
+        private int ctrlX(int x, int w, int cw) {
+            return x + w - cw - 2;
+        }
+
+        private int ctrlY(int y, int h) {
+            return hintShown() ? y + 3 : y + (h - 1 - 14) / 2;
         }
 
         private void cycle(int dir) {
@@ -1029,7 +1090,7 @@ public final class Rows {
         boolean click(Ctx c, double mx, double my, int button) {
             if (!on()) return false;
             int h = height(c, lastW), cw = controlWidth(c);
-            int cx = lastX + lastW - cw - 6, cy = lastY + (h - 3 - 14) / 2;
+            int cx = ctrlX(lastX, lastW, cw), cy = ctrlY(lastY, h);
             if (!Ui.inside(mx, my, cx, cy, cw, 14)) return false;
             wheelFocus = this;
             int dir = button == 1 ? -1 : (mx < cx + cw / 2.0 ? -1 : 1);
@@ -1042,7 +1103,7 @@ public final class Rows {
         boolean scroll(Ctx c, double mx, double my, double amount) {
             if (!on() || wheelFocus != this) return false;
             int h = height(c, lastW), cw = controlWidth(c);
-            int cx = lastX + lastW - cw - 6, cy = lastY + (h - 3 - 14) / 2;
+            int cx = ctrlX(lastX, lastW, cw), cy = ctrlY(lastY, h);
             if (!Ui.inside(mx, my, cx, cy, cw, 14)) return false;
             cycle(amount > 0 ? -1 : 1);
             return true;
@@ -1112,6 +1173,7 @@ public final class Rows {
         final Runnable action;
         BooleanSupplier enabled = () -> true;
         String tip;
+        int icon = UiIcons.NONE;
 
         public Btn(String label, Style style, Runnable action) {
             this(() -> label, () -> style, action);
@@ -1132,6 +1194,24 @@ public final class Rows {
             tip = t;
             return this;
         }
+
+        /** Иконка слева от подписи ({@link UiIcons}). */
+        public Btn icon(int i) {
+            icon = i;
+            return this;
+        }
+    }
+
+    private static final int BTN_ICON = 12;
+
+    /** Подпись по центру; иконка (если есть) слева от неё, вся группа центрируется. */
+    private static void buttonLabel(
+            Ctx c, GuiGraphicsExtractor g, int x, int y, int w, int h, String label, int icon, int color) {
+        int iw = icon >= 0 ? BTN_ICON + 4 : 0;
+        String s = Ui.ellipsize(c.font(), label, w - 6 - iw);
+        int total = iw + c.font().width(s), left = x + (w - total) / 2;
+        if (icon >= 0) UiIcons.draw(g, icon, left, y + (h - BTN_ICON) / 2, BTN_ICON, color);
+        Ui.text(g, c.font(), s, left + iw, y + (h - 8) / 2, color);
     }
 
     /** Рисует одну кнопку; возвращает true, если под мышью. Используется и вне строк. */
@@ -1143,6 +1223,22 @@ public final class Rows {
             int w,
             int h,
             String label,
+            Style style,
+            boolean enabled,
+            int mx,
+            int my) {
+        return drawButton(c, g, x, y, w, h, label, UiIcons.NONE, style, enabled, mx, my);
+    }
+
+    public static boolean drawButton(
+            Ctx c,
+            GuiGraphicsExtractor g,
+            int x,
+            int y,
+            int w,
+            int h,
+            String label,
+            int icon,
             Style style,
             boolean enabled,
             int mx,
@@ -1165,8 +1261,7 @@ public final class Rows {
                     4,
                     hover && enabled ? Ui.alpha(base, 0.14f) : Ui.WINDOW,
                     enabled ? Ui.alpha(base, hover ? 1f : 0.7f) : Ui.alpha(Ui.BORDER, 0.5f));
-            String s = Ui.ellipsize(c.font(), label, w - 6);
-            Ui.textCentered(g, c.font(), s, x + w / 2, y + (h - 8) / 2, !enabled ? Ui.DIM : base);
+            buttonLabel(c, g, x, y, w, h, label, icon, !enabled ? Ui.DIM : base);
             if (hover) c.hand();
             return hover;
         }
@@ -1180,15 +1275,13 @@ public final class Rows {
                     4,
                     hover && enabled ? Ui.CARD_HOVER : Ui.WINDOW,
                     enabled ? Ui.lerp(Ui.BORDER, Ui.SUB, hover ? 0.5f : 0.2f) : Ui.alpha(Ui.BORDER, 0.5f));
-            String s = Ui.ellipsize(c.font(), label, w - 6);
-            Ui.textCentered(g, c.font(), s, x + w / 2, y + (h - 8) / 2, !enabled ? Ui.DIM : hover ? Ui.TEXT : Ui.SUB);
+            buttonLabel(c, g, x, y, w, h, label, icon, !enabled ? Ui.DIM : hover ? Ui.TEXT : Ui.SUB);
             if (hover) c.hand();
             return hover;
         }
         Ui.round(g, x, y, w, h, 4, col);
         int tc = !enabled ? Ui.DIM : Ui.ON_ACCENT; // SECONDARY уже нарисована выше
-        String s = Ui.ellipsize(c.font(), label, w - 6);
-        Ui.textCentered(g, c.font(), s, x + w / 2, y + (h - 8) / 2, tc);
+        buttonLabel(c, g, x, y, w, h, label, icon, tc);
         if (hover) c.hand();
         return hover;
     }
@@ -1226,7 +1319,7 @@ public final class Rows {
                 Btn b = buttons[i];
                 int bx = x + i * (bw + 4);
                 boolean en = on() && b.enabled.getAsBoolean();
-                if (drawButton(c, g, bx, y, bw, 18, b.label.get(), b.style.get(), en, mx, my) && b.tip != null)
+                if (drawButton(c, g, bx, y, bw, 18, b.label.get(), b.icon, b.style.get(), en, mx, my) && b.tip != null)
                     c.tooltip(b.tip);
             }
         }
@@ -1420,8 +1513,16 @@ public final class Rows {
             c.clickSound();
         }
 
+        int leftPad() {
+            return 4;
+        }
+
+        int rightPad() {
+            return 4;
+        }
+
         void placeCursor(Ctx c, double mx, int boxX) {
-            int rel = (int) mx - (boxX + 4), best = buf.length();
+            int rel = (int) mx - (boxX + leftPad()), best = buf.length();
             for (int i = 0; i <= buf.length(); i++)
                 if (c.font().width(buf.substring(0, i)) >= rel) {
                     best = i;
@@ -1434,17 +1535,18 @@ public final class Rows {
             Font f = c.font();
             Ui.round(g, cx - 1, cy - 1, cw + 2, 16, 5, error != null ? Ui.DANGER : Ui.ACCENT);
             Ui.round(g, cx, cy, cw, 14, 4, Ui.FIELD);
+            int lp = leftPad(), avail = cw - lp - rightPad();
             String vis = buf;
             int off = 0;
-            while (f.width(vis) > cw - 10 && off < cursor) {
+            while (f.width(vis) > avail - 2 && off < cursor) {
                 off++;
                 vis = buf.substring(off);
             }
-            vis = f.plainSubstrByWidth(vis, cw - 8);
-            Ui.text(g, f, vis, cx + 4, cy + 3, Ui.TEXT);
+            vis = f.plainSubstrByWidth(vis, avail);
+            Ui.text(g, f, vis, cx + lp, cy + 3, Ui.TEXT);
             if ((Clock.millis() / 500) % 2 == 0) {
                 int cur = Math.max(off, Math.min(cursor, off + vis.length()));
-                int px = cx + 4 + f.width(buf.substring(off, cur));
+                int px = cx + lp + f.width(buf.substring(off, cur));
                 g.fill(px, cy + 2, px + 1, cy + 12, Ui.ACCENT_HI);
             }
             if (hover) c.tooltip(error != null ? error + " · Esc — вернуть как было" : editTip());
@@ -1453,6 +1555,7 @@ public final class Rows {
         void insert(String add) {
             StringBuilder ok = new StringBuilder();
             add.codePoints().forEach(cp -> {
+                if (cp < 0x20 || cp == 0x7F || cp == '§') return;
                 String ch = new String(Character.toChars(cp));
                 if (allowed(ch)) ok.append(ch);
             });
@@ -1466,7 +1569,7 @@ public final class Rows {
 
         boolean key(KeyEvent e) {
             switch (e.key()) {
-                case 257, 335 -> { // Enter
+                case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { // Enter
                     String err = commitText(buf);
                     if (err == null) {
                         textFocus = null;
@@ -1474,12 +1577,12 @@ public final class Rows {
                     } else error = err;
                     return true;
                 }
-                case 256 -> {
+                case GLFW.GLFW_KEY_ESCAPE -> {
                     textFocus = null;
                     error = null;
                     return true;
                 } // Esc — отменить
-                case 259 -> {
+                case GLFW.GLFW_KEY_BACKSPACE -> {
                     if (cursor > 0) {
                         buf = buf.substring(0, cursor - 1) + buf.substring(cursor);
                         cursor--;
@@ -1487,40 +1590,43 @@ public final class Rows {
                     }
                     return true;
                 }
-                case 261 -> {
+                case GLFW.GLFW_KEY_DELETE -> {
                     if (cursor < buf.length()) {
                         buf = buf.substring(0, cursor) + buf.substring(cursor + 1);
                         error = null;
                     }
                     return true;
                 }
-                case 263 -> {
+                case GLFW.GLFW_KEY_LEFT -> {
                     cursor = Math.max(0, cursor - 1);
                     return true;
                 }
-                case 262 -> {
+                case GLFW.GLFW_KEY_RIGHT -> {
                     cursor = Math.min(buf.length(), cursor + 1);
                     return true;
                 }
-                case 268 -> {
+                case GLFW.GLFW_KEY_HOME -> {
                     cursor = 0;
                     return true;
                 }
-                case 269 -> {
+                case GLFW.GLFW_KEY_END -> {
                     cursor = buf.length();
                     return true;
                 }
                 default -> {}
             }
             if (e.isPaste()) {
-                insert(Minecraft.getInstance().keyboardHandler.getClipboard().replace('\n', ' '));
+                insert(Minecraft.getInstance()
+                        .keyboardHandler
+                        .getClipboard()
+                        .replace("\r\n", " ")
+                        .replace('\n', ' '));
                 return true;
             }
-            if (e.hasControlDown() && e.key() == 65) {
-                buf = "";
-                cursor = 0;
+            if (e.hasControlDown() && e.key() == GLFW.GLFW_KEY_A) {
+                cursor = buf.length();
                 return true;
-            } // Ctrl+A — очистить
+            }
             return true; // остальные клавиши в поле не уходят дальше (Tab, клавиша меню и т. п.)
         }
     }
