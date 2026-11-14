@@ -1,3 +1,4 @@
+"\320\237\320\233\320\220\320\235\320\253.md"
 .agents/skills/minecraft-mod-dev/SKILL.md
 .claude/skills/minecraft-mod-dev/SKILL.md
 .gitattributes
@@ -12,10 +13,13 @@ LICENSE
 LICENSE-CC0
 README.md
 RELEASE-2.1.0.md
+RELEASE-2.2.0.md
 REMOVED-FILES.txt
 SLAYER-CATALOG.md
+SOURCE-FILES.txt
 THIRD-PARTY-NOTICES.txt
 UPDATING.md
+UPLOAD-README.txt
 build.gradle
 docs/AI_CONFIG_PROMPT.md
 docs/ANALYSIS.md
@@ -276,6 +280,7 @@ src/main/java/com/farmmacro/gui/SharedCameraRows.java
 src/main/java/com/farmmacro/gui/StatsRows.java
 src/main/java/com/farmmacro/gui/Tr.java
 src/main/java/com/farmmacro/gui/Ui.java
+src/main/java/com/farmmacro/gui/UiIcons.java
 src/main/java/com/farmmacro/gui/UiStyle.java
 src/main/java/com/farmmacro/gui/VisualTab.java
 src/main/java/com/farmmacro/gui/WelcomeScreen.java
@@ -296,6 +301,7 @@ src/main/java/com/farmmacro/loading/LoadingOptions.java
 src/main/java/com/farmmacro/loading/LoadingTextures.java
 src/main/java/com/farmmacro/macro/ActionGate.java
 src/main/java/com/farmmacro/macro/DelayModel.java
+src/main/java/com/farmmacro/macro/FileNames.java
 src/main/java/com/farmmacro/macro/HandDelays.java
 src/main/java/com/farmmacro/macro/HoldSettings.java
 src/main/java/com/farmmacro/macro/HumanSettings.java
@@ -515,6 +521,7 @@ src/main/resources/assets/farmmacro/textures/gui/foxy/f14.png
 src/main/resources/assets/farmmacro/textures/gui/foxy/f15.png
 src/main/resources/assets/farmmacro/textures/gui/foxy/f16.png
 src/main/resources/assets/farmmacro/textures/gui/foxy/f17.png
+src/main/resources/assets/farmmacro/textures/gui/icons.png
 src/main/resources/assets/farmmacro/textures/gui/loading/digits.png
 src/main/resources/assets/farmmacro/textures/gui/loading/foxy.png
 src/main/resources/assets/farmmacro/textures/gui/loading/labels.png
@@ -526,7 +533,6 @@ src/main/resources/assets/farmmacro/visitor-products.json
 src/main/resources/assets/farmmacro/whatsnew.txt
 src/main/resources/fabric.mod.json
 src/main/resources/farmmacro.mixins.json
-src/main/resources/icon.png
 src/main/resources/licenses/Aether-GPL-3.0.txt
 src/main/resources/licenses/Aether-NOTICE.txt
 src/main/resources/licenses/Kaelix-original-CC0.txt
@@ -592,9 +598,13 @@ src/stress/java/com/farmmacro/visual/CheeksCheck.java
 src/stress/java/com/farmmacro/visual/RouteStress.java
 src/stress/java/com/farmmacro/window/WindowCheck.java
 src/test/java/com/farmmacro/config/ConfigMigratorTest.java
+src/test/java/com/farmmacro/config/ConfigProfilesTest.java
 src/test/java/com/farmmacro/gui/LangFilesTest.java
+src/test/java/com/farmmacro/gui/MenuLayoutTest.java
+src/test/java/com/farmmacro/macro/FileNamesTest.java
 src/test/java/com/farmmacro/macro/MacroStatesTest.java
 src/test/java/com/farmmacro/notify/DiscordRetryPolicyTest.java
+src/test/java/com/farmmacro/route/PathFinderKeyTest.java
 src/test/java/com/farmmacro/route/RouteCodeTest.java
 src/test/java/com/farmmacro/stats/SessionHistoryTest.java
 src/test/java/com/farmmacro/test/StressChecksTest.java
@@ -641,6 +651,7 @@ tools/crop_fever/CROP_FEVER_end.gif
 tools/crop_fever/CROP_FEVER_end.mp3
 tools/crop_fever/README.md
 tools/gen_panic_sounds.py
+tools/gen_ui_icons.py
 tools/gui/gen_module_glyphs.py
 tools/loading/README.md
 tools/loading/generate_loading_art.py
@@ -649,4 +660,3 @@ tools/logo/gen_atlas.py
 tools/navigation/prepare_local_test.py
 tools/prepare_crop_fever.py
 tools/removed-files.txt
-ПЛАНЫ.md

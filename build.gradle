@@ -125,7 +125,7 @@ tasks.register('runProductionClientGameTest', net.fabricmc.loom.task.prod.Client
 	useXVFB = true
 }
 
-// Релиз: тег vX.Y.Z должен совпадать с mod_version. CI: ./gradlew verifyReleaseVersion -PreleaseModVersion=2.1.0
+// Релиз: тег vX.Y.Z должен совпадать с mod_version. CI: ./gradlew verifyReleaseVersion -PreleaseModVersion=2.2.0
 tasks.register('verifyReleaseVersion') {
 	group = 'verification'
 	description = 'Проверяет, что -PreleaseModVersion (из git-тега) совпадает с mod_version'

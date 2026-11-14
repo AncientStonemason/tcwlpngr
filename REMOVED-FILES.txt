@@ -177,3 +177,6 @@ validation/clean-build-quickCheck.log
 
 # Moved in 2.1.0 to docs/history/releases/ (delete the old copy at this path):
 RELEASE-2.0.2.md
+
+# Removed in 2.2.0: unreferenced duplicate of the mod icon.
+src/main/resources/icon.png

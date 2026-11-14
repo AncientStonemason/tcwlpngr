@@ -33,6 +33,7 @@ public final class KeybindRows {
         while (key.consumeClick()) {}
         key.setKey(value);
         KeyMapping.resetMapping();
+        KeyMapping.releaseAll(); // зажатая при захвате клавиша не должна остаться «нажатой»
         // Persist through Minecraft's normal options.txt; controls menu reflects the same mapping.
         Minecraft.getInstance().options.save();
     }

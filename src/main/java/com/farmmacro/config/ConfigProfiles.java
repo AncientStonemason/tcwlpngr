@@ -63,9 +63,16 @@ public final class ConfigProfiles {
         String s = name.strip().replaceAll("[^\\p{L}\\p{N} _.\\-]", "_");
         while (s.startsWith(".")) s = s.substring(1);
         if (s.length() > NAME_MAX) s = s.substring(0, NAME_MAX);
+        s = s.replaceAll("[ .]+$", "");
         s = s.strip();
-        return s.isEmpty() ? null : s;
+        if (s.isEmpty()) return null;
+        String stem = s.contains(".") ? s.substring(0, s.indexOf('.')).strip() : s;
+        if (RESERVED.matcher(stem).matches()) s = "_" + s;
+        return s;
     }
+
+    private static final java.util.regex.Pattern RESERVED =
+            java.util.regex.Pattern.compile("(?i)(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])");
 
     public static List<String> list() {
         List<String> out = new ArrayList<>();
@@ -135,6 +142,9 @@ public final class ConfigProfiles {
 
     /** v1.16.2: служебное и личное — не в строку настроек (как и не в профиль при загрузке). */
     private static final Set<String> NOT_IN_CODE = Set.of(
+            "friendNames",
+            "chatKeywords",
+            "aimManualName",
             "camPresets",
             "camSelected",
             "camNextId",
@@ -163,14 +173,21 @@ public final class ConfigProfiles {
     /** v1.16.2: все настройки (как профиль) одной строкой — скопировать и отправить. */
     public static String exportCode() {
         CombatProfiles.captureActive(ModConfig.INSTANCE);
-        JsonObject o = new Gson().toJsonTree(ModConfig.INSTANCE).getAsJsonObject();
+        return ConfigCode.encode(codeTree(ModConfig.INSTANCE).toString());
+    }
+
+    /** Настройки для строки: без служебного и без чужих ников (друзья, ключевые слова, цель по имени). */
+    static JsonObject codeTree(ModConfig c) {
+        JsonObject o = new Gson().toJsonTree(c).getAsJsonObject();
         for (String k : NOT_IN_CODE) o.remove(k);
         for (String key : PERF_RUNTIME) o.remove(key);
         if (o.has("telemetry")) {
             o.getAsJsonObject("telemetry").remove("bazaar");
             o.getAsJsonObject("telemetry").remove("save");
         }
-        return ConfigCode.encode(o.toString());
+        if (o.has("combatPanic") && o.get("combatPanic").isJsonObject())
+            o.getAsJsonObject("combatPanic").remove("friends");
+        return o;
     }
 
     /** v1.16.2: применить строку настроек. @return null — ок, иначе причина */
@@ -181,6 +198,8 @@ public final class ConfigProfiles {
             JsonObject o = JsonParser.parseString(json).getAsJsonObject();
             for (String k : NOT_IN_CODE) o.remove(k);
             for (String key : PERF_RUNTIME) o.remove(key);
+            if (o.has("combatPanic") && o.get("combatPanic").isJsonObject())
+                o.getAsJsonObject("combatPanic").remove("friends");
             ConfigMigrator.migrate(o);
             loaded = new Gson().fromJson(o, ModConfig.class);
         } catch (IllegalArgumentException e) {
@@ -190,7 +209,12 @@ public final class ConfigProfiles {
             return "Строка не читается: " + e.getClass().getSimpleName();
         }
         if (loaded == null) return "Пустая строка настроек";
-        loaded.welcomeDone = ModConfig.INSTANCE.welcomeDone;
+        ModConfig cur = ModConfig.INSTANCE;
+        loaded.welcomeDone = cur.welcomeDone;
+        loaded.friendNames = cur.friendNames; // личное: строка их не несёт, свои не затираем
+        loaded.chatKeywords = cur.chatKeywords;
+        loaded.aimManualName = cur.aimManualName;
+        if (loaded.combatPanic != null && cur.combatPanic != null) loaded.combatPanic.friends = cur.combatPanic.friends;
         apply(loaded);
         LOGGER.info("Настройки загружены из строки | {}", ModConfig.INSTANCE.describeThresholds());
         return null;
@@ -226,6 +250,7 @@ public final class ConfigProfiles {
         loaded.perfSavedChunks = cur.perfSavedChunks;
         loaded.perfAppliedChunks = cur.perfAppliedChunks;
         loaded.perfAppliedFps = cur.perfAppliedFps;
+        loaded.schemaVersion = ConfigMigrator.CURRENT;
         loaded.uiAdvanced = cur.uiAdvanced;
         loaded.uiSections = cur.uiSections; // вид меню — не часть профиля
         loaded.lastSeenVersion = cur.lastSeenVersion; // v1.16.2 «Что нового» — не часть профиля

@@ -28,6 +28,15 @@ class BugReportTest {
     }
 
     @Test
+    void configDropsOtherPlayersNames() {
+        var json = JsonParser.parseString("{\"friendNames\":\"Alice\",\"chatKeywords\":\"x\",\"aimManualName\":\"Bob\","
+                + "\"combatPanic\":{\"friends\":\"Carol\",\"keep\":1},\"panicEnabled\":true}");
+        String out = BugReport.portableConfig(json);
+        assertFalse(out.contains("Alice") || out.contains("Bob") || out.contains("Carol"), out);
+        assertTrue(out.contains("keep"), out);
+    }
+
+    @Test
     void configDropsWebhookAndSecrets() {
         var json = JsonParser.parseString("{\"webhookEnabled\":true,\"webhookOnPanic\":true,\"apiKey\":\"k\","
                 + "\"note\":\"see https://x.example/path\",\"panicEnabled\":true}");

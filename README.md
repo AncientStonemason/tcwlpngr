@@ -8,7 +8,7 @@ Kaelix — мод для Minecraft с инструментами для Hypixel 
 
 > **Важно:** автоматизация, Aim Assist и некоторые визуальные функции могут нарушать правила сервера. Kaelix не гарантирует отсутствие блокировок, не определяет администратора достоверно и не является официальным модом Hypixel. Используйте его только там, где это разрешено.
 
-**Текущая версия:** `2.1.0` · **Minecraft:** `26.1.2` · **Fabric** · **Java 25**
+**Текущая версия:** `2.2.0` · **Minecraft:** `26.1.2` · **Fabric** · **Java 25**
 
 [Скачать релизы](https://github.com/qu0tas/FARMMACRO/releases) · [Сообщить о проблеме](https://github.com/qu0tas/FARMMACRO/issues) · [История изменений](CHANGELOG.md) · [Релиз 2.1.0](RELEASE-2.1.0.md)
 
@@ -53,7 +53,7 @@ Kaelix — мод для Minecraft с инструментами для Hypixel 
 
 ## Требования и установка
 
-### Версии сборки 2.1.0
+### Версии сборки 2.2.0
 
 | Компонент | Версия |
 | --- | --- |
@@ -61,7 +61,7 @@ Kaelix — мод для Minecraft с инструментами для Hypixel 
 | Java | **25** |
 | Fabric Loader | **0.19.5** |
 | Fabric API | **0.155.3+26.1.2** |
-| Kaelix | **2.1.0** |
+| Kaelix | **2.2.0** |
 
 Это **клиентский Fabric-мод**. Данная сборка не предназначена для Forge, NeoForge или других версий Minecraft. Устанавливать Kaelix на сервер не требуется.
 
@@ -69,7 +69,7 @@ Kaelix — мод для Minecraft с инструментами для Hypixel 
 
 1. Создайте в лаунчере профиль **Minecraft 26.1.2 + Fabric** и выберите Java 25.
 2. Установите Fabric API для этой версии Minecraft.
-3. Скачайте `kaelix-2.1.0.jar` на странице [Releases](https://github.com/qu0tas/FARMMACRO/releases) (JAR-файлы больше не лежат в самом репозитории).
+3. Скачайте `kaelix-2.2.0.jar` на странице [Releases](https://github.com/qu0tas/FARMMACRO/releases) (JAR-файлы больше не лежат в самом репозитории).
 4. Поместите JAR в папку `mods` выбранного игрового профиля.
 5. Удалите предыдущий Kaelix/FarmMacro JAR: одновременно должна оставаться только одна версия мода.
 6. Запустите игру и откройте меню Kaelix.
@@ -413,7 +413,7 @@ chmod +x gradlew
 
 `build` компилирует мод с Error Prone и NullAway, проверяет форматирование (`spotlessCheck`), что удалённые файлы не вернулись (`checkRemovedFiles`), и запускает JUnit-тесты без игры (`test`, туда же входят старые `quickCheck`). Если JDK 25 не установлен, Gradle скачает его сам (toolchain). Расширенные проверки: `./gradlew compileStressJava routeStress`.
 
-Готовый JAR находится в `build/libs/`. Для версии из этого README это `kaelix-2.1.0.jar`.
+Готовый JAR находится в `build/libs/`. Для версии из этого README это `kaelix-2.2.0.jar`.
 
 | Команда | Что делает |
 | --- | --- |
@@ -421,7 +421,7 @@ chmod +x gradlew
 | `./gradlew test` | Только JUnit; отчёт покрытия — `build/reports/jacoco/test/html` |
 | `./gradlew runClientGameTest` | Запускает настоящий Minecraft: приветствие, все модули меню, мир с HUD, редакторы, Crop Fever, паника. Скриншоты — `build/run/clientGameTest/screenshots`. На Linux без экрана — под `xvfb-run` |
 | `./gradlew runProductionClientGameTest` | То же на собранном JAR (так делает CI) |
-| `./gradlew verifyReleaseVersion -PreleaseModVersion=2.1.0` | Проверка, что тег релиза совпадает с `mod_version` |
+| `./gradlew verifyReleaseVersion -PreleaseModVersion=2.2.0` | Проверка, что тег релиза совпадает с `mod_version` |
 
 CI (`.github/workflows/build.yml`) на каждый push/PR собирает, тестирует и запускает game-тесты под Xvfb (скриншоты — в артефактах). Релиз: `git tag v2.1.0 && git push origin v2.1.0` — `release.yml` сам опубликует GitHub Release с JAR, архивом исходников и `SHA256SUMS.txt`, текст берётся из раздела `[2.1.0]` в CHANGELOG.md.
 
@@ -458,7 +458,7 @@ src/gametest/   # Клиентские game-тесты Fabric (настоящи�
 
 Полный source ZIP содержит `SOURCE-FILES.txt` и `REMOVED-FILES.txt`. При замене исходников обязательно удалите файлы из `REMOVED-FILES.txt`: загрузка через GitHub **Add files** сама не удаляет старые классы. Не публикуйте кеши, `.git`, локальные SDK и пользовательскую конфигурацию.
 
-**Статус проверки 2.1.0:** `./gradlew clean build compileStressJava routeStress` и клиентские game-тесты в настоящем Minecraft 26.1.2 (под Xvfb) проходят. На Hypixel (сеть, реальный фарм, Discord, звук) не проверялось — это за пользователем.
+**Статус проверки 2.2.0:** `./gradlew build compileStressJava` и клиентские game-тесты в настоящем Minecraft 26.1.2 (под Xvfb) проходят. На Hypixel (сеть, реальный фарм, Discord, звук) не проверялось — это за пользователем.
 
 ## Лицензия и благодарности
 
