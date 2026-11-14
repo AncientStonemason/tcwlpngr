@@ -72,6 +72,7 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
     private double scroll;
     private final DragWindow dragWindow = new DragWindow();
     private boolean modified;
+    private boolean closed;
     private String tooltip;
     private boolean wantHand;
 
@@ -699,7 +700,7 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
             public void close(boolean modified) {
                 if (!modified) return;
                 if (!MacroStorage.INSTANCE.saveSettings(info.filename(), s)) {
-                    msg("§c[FM] Не удалось записать настройки (подробности в логе)");
+                    msg("§c[Kaelix] Не удалось записать настройки (подробности в логе)");
                     return;
                 }
                 if (info.name().equals(mm.getLoadedName())) mm.replaceSettings(s.copy());
@@ -771,7 +772,7 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
             public void close(boolean modified) {
                 if (!modified) return;
                 if (!RouteStorage.INSTANCE.saveSettings(info.filename(), s)) {
-                    msg("§c[FM] Не удалось записать настройки (подробности в логе)");
+                    msg("§c[Kaelix] Не удалось записать настройки (подробности в логе)");
                     return;
                 }
                 if (info.name().equals(rb.loadedName())) rb.replaceSettings(s.copy());
@@ -865,12 +866,14 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
+        if (Rows.drag(this, e.x())) return true;
         if (dragWindow.move(e.x(), e.y())) return true;
         return super.mouseDragged(e, dx, dy);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent e) {
+        Rows.dragEnd();
         if (dragWindow.release()) return true;
         return super.mouseReleased(e);
     }
@@ -912,10 +915,24 @@ public class MacroSettingsScreen extends Screen implements Rows.Ctx {
 
     @Override
     public void onClose() {
+        finish();
+        minecraft.setScreen(parent);
+    }
+
+    /** Экран могут заменить другим (паника, смерть, отключение) — правки сохранённого файла не должны пропасть. */
+    @Override
+    public void removed() {
+        finish();
+        super.removed();
+    }
+
+    private void finish() {
+        Rows.dragEnd();
         Rows.clearWheelFocus();
         Rows.blurText();
+        if (closed) return;
+        closed = true;
         t.close(modified);
-        minecraft.setScreen(parent);
     }
 
     // ── Rows.Ctx ─────────────────────────────────────────────────────────────
