@@ -24,7 +24,8 @@ public final class HuntingTargets {
     }
 
     public static boolean known(String name) {
-        return groups().stream().anyMatch(g -> g.mobs().stream().anyMatch(n -> n.equalsIgnoreCase(normalize(name))));
+        String normalized = normalize(name);
+        return groups().stream().anyMatch(g -> g.mobs().stream().anyMatch(n -> n.equalsIgnoreCase(normalized)));
     }
 
     private static final Pattern LEVEL = Pattern.compile("(?i)^\\[\\s*Lv\\.?\\s*[\\d,]+\\]\\s*"),

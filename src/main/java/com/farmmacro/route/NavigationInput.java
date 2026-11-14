@@ -8,6 +8,7 @@ import com.farmmacro.macro.HandDelays;
 import com.farmmacro.macro.MacroManager;
 import com.farmmacro.motion.MotionController;
 import com.farmmacro.motion.MotionPolicy;
+import java.lang.ref.WeakReference;
 import java.util.function.Supplier;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -18,7 +19,8 @@ public final class NavigationInput {
     private static Object owner, cameraRequest;
     private static boolean mouseKnown;
     private static double mouseX, mouseY;
-    private static Object jumpPlayer, jumpWorld;
+    // Слабые ссылки: статическое поле не должно держать игрока и ClientLevel после выхода из мира.
+    private static WeakReference<Object> jumpPlayer = new WeakReference<>(null), jumpWorld = new WeakReference<>(null);
     private static int lastJumpEdge = -100, edgeTick = -100;
     /** Jump edges within vanilla's seven-tick window toggle flight. Cruise must not generate them. */
     public static void takeoffJump(Object token, Options o, boolean wanted) {
@@ -33,9 +35,9 @@ public final class NavigationInput {
             o.keyJump.setDown(false);
             return;
         }
-        if (jumpPlayer != p || jumpWorld != mc.level) {
-            jumpPlayer = p;
-            jumpWorld = mc.level;
+        if (jumpPlayer.get() != p || jumpWorld.get() != mc.level) {
+            jumpPlayer = new WeakReference<>(p);
+            jumpWorld = new WeakReference<>(mc.level);
             lastJumpEdge = edgeTick = p.tickCount - 100;
         }
         // Compare with the input vanilla actually sampled, not transient release()/apply() writes this tick.
