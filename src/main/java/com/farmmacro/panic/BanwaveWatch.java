@@ -1,6 +1,7 @@
 package com.farmmacro.panic;
 
 import com.farmmacro.config.ModConfig;
+import com.farmmacro.util.AtomicFiles;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.net.URI;
@@ -10,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -99,7 +101,18 @@ public final class BanwaveWatch {
             return false;
         try {
             Files.createDirectories(keyFile().getParent());
-            Files.writeString(keyFile(), k, StandardCharsets.UTF_8);
+            Path tmp = Files.createTempFile(keyFile().getParent(), "hypixel-", ".tmp");
+            try {
+                try {
+                    Files.setPosixFilePermissions(tmp, PosixFilePermissions.fromString("rw-------"));
+                } catch (UnsupportedOperationException ignored) {
+                    // non-POSIX file system
+                }
+                Files.writeString(tmp, k, StandardCharsets.UTF_8);
+                AtomicFiles.replace(tmp, keyFile());
+            } finally {
+                Files.deleteIfExists(tmp);
+            }
         } catch (Exception e) {
             LOGGER.warn("Не удалось сохранить ключ Hypixel", e);
         }
@@ -135,13 +148,22 @@ public final class BanwaveWatch {
             client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
                     .build();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(URL))
-                .timeout(Duration.ofSeconds(15))
-                .header("API-Key", k)
-                .header("User-Agent", "FarmMacro")
-                .GET()
-                .build();
-        CompletableFuture<HttpResponse<String>> f = client.sendAsync(req, HttpResponse.BodyHandlers.ofString());
+        CompletableFuture<HttpResponse<String>> f;
+        try {
+            HttpRequest req = HttpRequest.newBuilder(URI.create(URL))
+                    .timeout(Duration.ofSeconds(15))
+                    .header("API-Key", k)
+                    .header("User-Agent", "FarmMacro")
+                    .GET()
+                    .build();
+            f = client.sendAsync(req, HttpResponse.BodyHandlers.ofString());
+        } catch (RuntimeException e) { // inFlight must never stay set, or polling stops until restart
+            inFlight = false;
+            nextPollMs = now + RETRY_MS;
+            status = "не удалось отправить запрос";
+            LOGGER.warn("Банвейв: запрос не отправлен ({})", e.getClass().getSimpleName());
+            return;
+        }
         f.whenComplete((resp, err) -> {
             try {
                 long t = System.currentTimeMillis();
