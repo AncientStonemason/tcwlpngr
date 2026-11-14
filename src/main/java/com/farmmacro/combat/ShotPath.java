@@ -3,6 +3,7 @@ package com.farmmacro.combat;
 import com.farmmacro.panic.ServerText;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -10,13 +11,23 @@ import net.minecraft.world.phys.Vec3;
 
 /** Collision ray with loaded-chunk verification, not a prediction of server damage or projectile lifetime. */
 public final class ShotPath {
+    // CustomData неизменяем: пока предмет тот же, NBT не нужно копировать на каждый вызов (кадр/тик).
+    private static CustomData lastData;
+    private static String lastId = "";
+
+    private static String itemId(CustomData data) {
+        if (data != lastData) {
+            lastId = data.copyTag().getCompoundOrEmpty("ExtraAttributes").getStringOr("id", "");
+            lastData = data;
+        }
+        return lastId;
+    }
+
     public static boolean holdingScythe(Minecraft mc) {
         if (mc.player == null) return false;
         var stack = mc.player.getMainHandItem();
         var data = stack.get(DataComponents.CUSTOM_DATA);
-        String id = data == null
-                ? ""
-                : data.copyTag().getCompoundOrEmpty("ExtraAttributes").getStringOr("id", "");
+        String id = data == null ? "" : itemId(data);
         if (!id.isEmpty()) return id.equals("GLACIAL_SCYTHE");
         return ServerText.clean(stack.getHoverName().getString()).contains("Glacial Scythe");
     }
