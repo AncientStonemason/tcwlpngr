@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.Arrays;
 import java.util.concurrent.*;
+import net.minecraft.client.Minecraft;
 
 /**
  * Bounded outbound-only webhook transport. 2.1.0: a request is retried (twice, 3 s / 10 s) only when the TCP/TLS
@@ -255,25 +256,38 @@ public final class DiscordNotify {
                 block(response.headers().firstValue("Retry-After").orElse("60"));
                 POOL.getQueue().clear();
                 status = "Discord 429: ожидание Retry-After, сообщение НЕ повторяется";
-            } else if (code >= 400 && code < 500) {
+            } else if (image != null && (code == 400 || code == 413)) {
+                logLater("DISCORD", kind + ": HTTP " + code + ", повтор без PNG");
+                post(u, content, null, kind, epoch, false);
+                return;
+            } else if (code == 401 || code == 403 || code == 404) {
                 suspended = true;
                 POOL.getQueue().clear();
                 status = "Discord " + code + ": проверь/замени webhook и сбрось ошибку вручную";
+            } else if (code >= 400 && code < 500) {
+                block("60");
+                status = "Discord " + code + ": сообщение отклонено, автоматических повторов нет";
             } else {
                 block("60");
                 status = "Discord " + code + ": сообщение не подтверждено, автоматических повторов нет";
             }
-            EventLog.log("DISCORD", kind + ": HTTP " + code + (image != null ? ", PNG opt-in" : ""));
+            logLater("DISCORD", kind + ": HTTP " + code + (image != null ? ", PNG opt-in" : ""));
         } catch (Exception e) {
             if (generation == epoch) {
                 block("60");
                 status = "Нет подтверждения Discord (" + e.getClass().getSimpleName() + ")"
                         + (connectFailure(e) ? "; повторы исчерпаны" : "; повторов нет");
-                EventLog.log("DISCORD", "Ошибка " + e.getClass().getSimpleName());
+                logLater("DISCORD", "Ошибка " + e.getClass().getSimpleName());
             }
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
         }
     }
+
+    private static void logLater(String tag, String msg) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null) mc.execute(() -> EventLog.log(tag, msg));
+    }
+
     /** Pauses before connect retries; index = retry number. */
     static final long[] CONNECT_RETRY_MS = {3000, 10000};
 

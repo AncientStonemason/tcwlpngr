@@ -293,8 +293,8 @@ public final class Ui {
     /** Скруглённая плашка с рамкой толщиной 1. */
     public static void roundBordered(GuiGraphicsExtractor g, int x, int y, int w, int h, int r, int fill, int border) {
         int rr = RADIUS >= 1f ? r : Math.round(r * RADIUS);
-        roundExact(g, x, y, w, h, rr, border);
         roundExact(g, x + 1, y + 1, w - 2, h - 2, Math.max(0, rr - 1), fill);
+        outline(g, x, y, w, h, r, border);
     }
 
     /** Border only: unlike layering two translucent filled boxes, never tints the interior. */
@@ -390,16 +390,6 @@ public final class Ui {
     /** v1.16.0: блок-карточка (текущий макрос/маршрут). Минималистично — тонкая рамка без заливки. */
     public static void box(GuiGraphicsExtractor g, int x, int y, int w, int h, int r) {
         roundBordered(g, x, y, w, h, r, WINDOW, BORDER);
-    }
-
-    /** Текст вразрядку (между буквами +gap px). @return x после текста. */
-    public static int spaced(GuiGraphicsExtractor g, Font f, String s, int x, int y, int color, int gap) {
-        for (int i = 0; i < s.length(); i++) {
-            String ch = String.valueOf(s.charAt(i));
-            g.text(f, ch, x, y, color, false);
-            x += f.width(ch) + gap;
-        }
-        return x;
     }
 
     /** Обрезает строку по ширине с «…». */

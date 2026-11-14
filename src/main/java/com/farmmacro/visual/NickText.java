@@ -61,19 +61,22 @@ public final class NickText {
 
     /** Совпадения в тексте из кодовых точек: {начало, конец (искл.), индекс пары}, по порядку, без пересечений. */
     public static List<int[]> find(int[] cps, List<Pair> pairs) {
+        return cps == null ? new ArrayList<>() : find(cps, cps.length, pairs);
+    }
+
+    /** То же, но только по первым len кодовым точкам массива. */
+    public static List<int[]> find(int[] cps, int len, List<Pair> pairs) {
         List<int[]> out = new ArrayList<>();
         if (cps == null || pairs == null || pairs.isEmpty()) return out;
-        int[][] from = new int[pairs.size()][];
-        for (int k = 0; k < pairs.size(); k++)
-            from[k] = pairs.get(k).from().codePoints().toArray();
+        int[][] from = compiled(pairs).from();
         int i = 0;
         outer:
-        while (i < cps.length) {
+        while (i < len) {
             boolean startOk = i == 0 || !word(cps[i - 1]) || (i >= 2 && cps[i - 2] == '§');
             if (startOk) {
                 for (int k = 0; k < from.length; k++) {
                     int[] f = from[k];
-                    if (i + f.length > cps.length) continue;
+                    if (i + f.length > len) continue;
                     boolean m = true;
                     for (int j = 0; j < f.length; j++)
                         if (!eqIc(cps[i + j], f[j])) {
@@ -82,7 +85,7 @@ public final class NickText {
                         }
                     if (!m) continue;
                     int e = i + f.length;
-                    if (e < cps.length && word(cps[e])) continue;
+                    if (e < len && word(cps[e])) continue;
                     out.add(new int[] {i, e, k});
                     i = e;
                     continue outer;
@@ -114,7 +117,26 @@ public final class NickText {
     /** Быстрая проверка: есть ли в строке хоть один ник (без учёта регистра). */
     public static boolean mayContain(String s, List<Pair> pairs) {
         String low = s.toLowerCase(Locale.ROOT);
-        for (Pair p : pairs) if (low.contains(p.from().toLowerCase(Locale.ROOT))) return true;
+        for (String f : compiled(pairs).low()) if (low.contains(f)) return true;
         return false;
+    }
+
+    private record Compiled(List<Pair> src, int[][] from, String[] low) {}
+
+    private static volatile Compiled last = new Compiled(List.of(), new int[0][], new String[0]);
+
+    private static Compiled compiled(List<Pair> pairs) {
+        Compiled c = last;
+        if (c.src() == pairs) return c;
+        int[][] from = new int[pairs.size()][];
+        String[] low = new String[pairs.size()];
+        for (int k = 0; k < from.length; k++) {
+            String f = pairs.get(k).from();
+            from[k] = f.codePoints().toArray();
+            low[k] = f.toLowerCase(Locale.ROOT);
+        }
+        c = new Compiled(pairs, from, low);
+        last = c;
+        return c;
     }
 }

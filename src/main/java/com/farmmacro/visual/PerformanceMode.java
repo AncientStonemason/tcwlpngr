@@ -75,6 +75,15 @@ public final class PerformanceMode {
         if (was) msg(mc, why == null ? "§7⚡ Производительность выключена" : "§e⚡ Производительность выключена: " + why);
     }
 
+    /** Неизвестное имя из старого/испорченного конфига — не повод повторять восстановление вечно. */
+    private static <E extends Enum<E>> @org.jspecify.annotations.Nullable E parse(Class<E> type, String name) {
+        try {
+            return Enum.valueOf(type, name);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     private static boolean restoreStep(String id, Runnable task) {
         return Guard.run("perf/" + id, task);
     }
@@ -90,13 +99,17 @@ public final class PerformanceMode {
                 })) c.perfSavedFps = c.perfAppliedFps = -1;
         if (c.perfSavedClouds != null
                 && restoreStep("clouds", () -> {
-                    if (o.cloudStatus().get() == CloudStatus.OFF)
-                        o.cloudStatus().set(CloudStatus.valueOf(c.perfSavedClouds));
+                    if (o.cloudStatus().get() == CloudStatus.OFF) {
+                        var saved = parse(CloudStatus.class, c.perfSavedClouds);
+                        if (saved != null) o.cloudStatus().set(saved);
+                    }
                 })) c.perfSavedClouds = null;
         if (c.perfSavedParticles != null
                 && restoreStep("particles", () -> {
-                    if (o.particles().get() == ParticleStatus.MINIMAL)
-                        o.particles().set(ParticleStatus.valueOf(c.perfSavedParticles));
+                    if (o.particles().get() == ParticleStatus.MINIMAL) {
+                        var saved = parse(ParticleStatus.class, c.perfSavedParticles);
+                        if (saved != null) o.particles().set(saved);
+                    }
                 })) c.perfSavedParticles = null;
         if (c.perfSavedShadows >= 0
                 && restoreStep("shadows", () -> {
