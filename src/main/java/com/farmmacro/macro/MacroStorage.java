@@ -2,6 +2,7 @@ package com.farmmacro.macro;
 
 import com.farmmacro.camera.CameraBinding;
 import com.farmmacro.util.AtomicFiles;
+import com.farmmacro.util.Clock;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.stream.JsonReader;
@@ -87,7 +88,7 @@ public class MacroStorage {
         if (file == null || frames.isEmpty()) return false;
         SavedMacro m = new SavedMacro();
         m.name = name.trim();
-        m.createdAt = System.currentTimeMillis();
+        m.createdAt = Clock.wallMillis();
         m.frames = new ArrayList<>(frames);
         return write(file, m, settings);
     }

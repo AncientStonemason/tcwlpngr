@@ -15,11 +15,8 @@ final class ModuleCardRow extends Rows.Row {
         this.open = open;
         this.focused = focused;
         int index = ModuleCatalog.ALL.indexOf(module);
-        icon = module.title().startsWith("Рыбалка")
-                ? 19
-                : module.title().equals("Производительность")
-                        ? 18
-                        : index; // Dedicated authored rod glyph; retired schedule remains unused.
+        // По id, а не по названию: название меняется вместе с языком. Свои значки у рыбалки и производительности.
+        icon = module.id().equals("fishing") ? 19 : module.id().equals("performance") ? 18 : index;
     }
 
     @Override

@@ -1005,14 +1005,14 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
             List.of(new Rows.Choice("RECORDING", "Запись"), new Rows.Choice("ROUTE", "Маршрут по точкам"));
 
     private void buildMacros() {
-        rows.add(new Rows.Section("Запись действий · дополнительная функция"));
+        rows.add(new Rows.Section("Запись действий · дополнительная функция").key("rec.cur"));
         rows.add(new Rows.Buttons(new Rows.Btn(
                         () -> MacroManager.INSTANCE.isRecording() ? "Остановить запись" : "Начать запись",
                         () -> MacroManager.INSTANCE.isRecording() ? Rows.Style.DANGER : Rows.Style.PRIMARY,
                         () -> {
                             var m = MacroManager.INSTANCE;
                             if (m.isActive() && !m.isRecording()) return;
-                            onClose();
+                            closeMenu();
                             m.toggleRecording(minecraft);
                         })
                 .enabledIf(() -> !MacroManager.INSTANCE.isActive() || MacroManager.INSTANCE.isRecording())));
@@ -1157,7 +1157,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                     MacroManager.INSTANCE.startRouteHere(minecraft);
                 })
                 .enabledIf(() -> rb.size() >= 2 && MacroManager.INSTANCE.getState() == MacroManager.State.IDLE)));
-        rows.add(new Rows.Number(
+        rows.add(number(
                 "Допуск старта с места",
                 "Расстояние до ближайшего отрезка; этаж учитывается. Не автовозврат к началу.",
                 () -> cfg().resumeAnywhereMaxDist,
@@ -1850,8 +1850,9 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
                 c.clickSound();
                 var saved = MacroStorage.INSTANCE.load(info.filename());
                 if (saved == null) {
-                    minecraft.player.sendOverlayMessage(
-                            Component.literal("§c[FM] Не удалось прочитать файл макроса (подробности в логе)"));
+                    if (minecraft.player != null)
+                        minecraft.player.sendOverlayMessage(
+                                Component.literal("§c[FM] Не удалось прочитать файл макроса (подробности в логе)"));
                     return true;
                 }
                 if (MacroManager.INSTANCE.loadMacro(info.name(), saved.frames, saved.settings, minecraft) && mx < bx[1])
@@ -2062,6 +2063,11 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         return col;
     }
 
+    private static String stripStatusIcon(String s) {
+        if (s.isEmpty() || "■▶●◷◎".indexOf(s.charAt(0)) < 0) return s;
+        return s.length() > 1 && s.charAt(1) == ' ' ? s.substring(2) : s.substring(1);
+    }
+
     private void renderHeader(GuiGraphicsExtractor g, int x, int y, int w, int mx, int my) {
         String[] fs = new String[1];
         int fc = statusOf(fs);
@@ -2081,7 +2087,7 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         Ui.text(
                 g,
                 font,
-                Ui.ellipsize(font, status.replaceFirst("^[■▶●◷◎] ?", ""), contW() - 26),
+                Ui.ellipsize(font, stripStatusIcon(status), contW() - 26),
                 hx,
                 y + 31,
                 col == Ui.DANGER || col == Ui.WARN ? col : Ui.SUB);
@@ -2507,13 +2513,36 @@ public class FarmMacroScreen extends Screen implements Rows.Ctx {
         return true;
     }
 
-    @Override
-    public void onClose() {
+    private void flushEdits() {
         Rows.searching = false;
         Rows.clearWheelFocus();
         Rows.blurText();
         MacroManager.INSTANCE.saveSettingsIfDirty();
         ModConfig.save();
+    }
+
+    /** Закрыть всё меню целиком (не «назад» к каталогу модулей). */
+    private void closeMenu() {
+        flushEdits();
+        minecraft.setScreen(null);
+    }
+
+    @Override
+    public void onClose() {
+        flushEdits();
         minecraft.setScreen(parent);
+    }
+
+    /** Экран могли заменить не через onClose (другой мод, отключение): не оставляем ввод и перетаскивание висеть. */
+    @Override
+    public void removed() {
+        Rows.clearWheelFocus();
+        Rows.blurText();
+        Rows.dragEnd();
+        if (draggingWindow) {
+            draggingWindow = false;
+            save();
+        }
+        super.removed();
     }
 }

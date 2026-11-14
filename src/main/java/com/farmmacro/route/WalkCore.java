@@ -462,7 +462,9 @@ public final class WalkCore {
         if (target <= 0 || done || pts.isEmpty() || dropPhase != D_NONE || target >= pts.size()) return Double.NaN;
         double f = segmentFraction(x, z);
         RoutePoint a = pts.get(target - 1), b = pts.get(target);
-        return a.y + (b.y - a.y) * f;
+        // после спуска отрезок начинается с места приземления — уже на этаже точки b, а не на высоте точки-спуска
+        double ay = a.drop ? b.y : a.y;
+        return ay + (b.y - ay) * f;
     }
 
     /** Прогресс на отрезке к target: 0…1 (для раскраски «пройдено»). */
