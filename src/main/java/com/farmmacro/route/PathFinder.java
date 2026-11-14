@@ -580,6 +580,7 @@ public final class PathFinder {
     }
 
     private static final int[][] DIRS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+    private static final int[][] ORTHO = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     private void expand(int id, int x, int z, double y) {
         for (int[] d : DIRS) {
@@ -633,7 +634,7 @@ public final class PathFinder {
                 if (!pass) continue;
             } else if (m == Move.WALK && !door && !w.bodyClear(x2 + .5, f + .001, z2 + .5, .30, BODY - .002)) continue;
             if (m == Move.WALK)
-                for (int[] side : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}})
+                for (int[] side : ORTHO)
                     if (!clear(x2 + side[0], z2 + side[1], f, f + BODY)) cost += .12;
             if (lavaNear(x2, z2, f)) cost += C_LAVA_NEAR;
             if (door) cost += C_DOOR;
