@@ -4,6 +4,7 @@ import com.farmmacro.config.HudSlot;
 import com.farmmacro.config.ModConfig;
 import com.farmmacro.gui.FlatButton;
 import com.farmmacro.gui.Ui;
+import com.farmmacro.util.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -119,9 +120,9 @@ public class HudEditorScreen extends Screen {
             dragId = null;
         });
         allBtn = add("Сброс всех", "Повторное нажатие в течение3секунд; иначе сброса нет", () -> {
-            long now = System.nanoTime();
+            long now = Clock.millis();
             if (now >= resetAllUntil) {
-                resetAllUntil = now + 3_000_000_000L;
+                resetAllUntil = now + 3_000L;
                 return;
             }
             cfg().hudSlots.clear();
@@ -178,7 +179,7 @@ public class HudEditorScreen extends Screen {
         snapBtn.setMessage(Component.literal("Snap: " + yes(cfg().hudEditorSnap)));
         gridBtn.setMessage(Component.literal("Сетка: " + yes(cfg().hudEditorGrid)));
         mergeBtn.setMessage(Component.literal("Общая: " + yes(cfg().hudMerged)));
-        allBtn.setMessage(Component.literal(System.nanoTime() < resetAllUntil ? "Сбросить ВСЁ?" : "Сброс всех"));
+        allBtn.setMessage(Component.literal(Clock.millis() < resetAllUntil ? "Сбросить ВСЁ?" : "Сброс всех"));
         hideBtn.active = rect(selectedId) != null && !selectedId.equals("all");
         resetBtn.active = rect(selectedId) != null;
         hideBtn.setMessage(Component.literal(
