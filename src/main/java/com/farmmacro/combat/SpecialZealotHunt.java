@@ -63,6 +63,7 @@ public final class SpecialZealotHunt {
                 || s.equals("a special zealot has spawned nearby");
         long now = System.nanoTime();
         boolean paired = (pending || active())
+                && lastNotice != 0
                 && now - lastNotice < 1_500_000_000L
                 && (s.equals("has spawned nearby!") || s.equals("has spawned nearby"));
         var c = ModConfig.INSTANCE;
@@ -78,7 +79,7 @@ public final class SpecialZealotHunt {
                 || !BackgroundWork.permitted(mc)
                 || mc.isPaused()
                 || !AimAssist.INSTANCE.contextFree(mc)) return false;
-        if (exact && now - lastNotice > 1_500_000_000L) {
+        if (exact && (lastNotice == 0 || now - lastNotice > 1_500_000_000L)) {
             lastNotice = now;
             if (!active()) pending = true;
         }
