@@ -10,13 +10,21 @@ import net.minecraft.world.phys.Vec3;
 
 /** Collision ray with loaded-chunk verification, not a prediction of server damage or projectile lifetime. */
 public final class ShotPath {
+    private static net.minecraft.world.item.component.CustomData idKey;
+    private static String idValue = "";
+
     public static boolean holdingScythe(Minecraft mc) {
         if (mc.player == null) return false;
         var stack = mc.player.getMainHandItem();
         var data = stack.get(DataComponents.CUSTOM_DATA);
-        String id = data == null
-                ? ""
-                : data.copyTag().getCompoundOrEmpty("ExtraAttributes").getStringOr("id", "");
+        String id = "";
+        if (data != null) {
+            if (data != idKey) {
+                idValue = data.copyTag().getCompoundOrEmpty("ExtraAttributes").getStringOr("id", "");
+                idKey = data;
+            }
+            id = idValue;
+        }
         if (!id.isEmpty()) return id.equals("GLACIAL_SCYTHE");
         return ServerText.clean(stack.getHoverName().getString()).contains("Glacial Scythe");
     }
