@@ -226,19 +226,22 @@ public final class SessionHistory {
     /** Прочитать прежний CSV (только чтобы не затереть историю; разбор мягкий, битые строки пропускаются). */
     private static void ensureLoaded() {
         if (loaded) return;
-        loaded = true;
         if (!ModConfig.INSTANCE.telemetry.save) return;
         try {
             Path f = file();
-            if (!Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS) || Files.size(f) > 2_000_000) return;
+            if (!Files.isRegularFile(f, LinkOption.NOFOLLOW_LINKS) || Files.size(f) > 2_000_000) {
+                loaded = true;
+                return;
+            }
             List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
             for (int i = 1; i < lines.size(); i++) {
                 Run r = parse(lines.get(i));
                 if (r != null) RUNS.add(r);
             }
             while (RUNS.size() > MAX_ROWS) RUNS.removeFirst();
+            loaded = true;
         } catch (Exception ignored) {
-            // нет файла или битый — начинаем пустую историю, файл перепишется при следующем запуске
+            // временная ошибка чтения: повторим при следующем обращении
         }
     }
 

@@ -232,6 +232,10 @@ public final class CombatProfiles {
             c.combatProfiles.add(new CombatProfile(id, name, snapshot(clean)));
             select(c, id);
             return null;
+        } catch (IllegalArgumentException e) {
+            return e.getMessage() != null && !e.getMessage().isBlank()
+                    ? e.getMessage()
+                    : "Профиль не читается: IllegalArgumentException";
         } catch (RuntimeException e) {
             return "Профиль не читается: " + e.getClass().getSimpleName();
         }

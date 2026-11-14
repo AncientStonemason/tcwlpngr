@@ -213,9 +213,12 @@ public final class PathFinder {
             double dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
             if (len < 1e-6) continue;
             int k = Math.max(1, (int) Math.ceil(len / 0.5));
+            boolean nextSegmentSampled = i + 1 < n
+                    && !b.drop
+                    && Math.hypot(pts.get(i + 2).x - b.x, pts.get(i + 2).z - b.z) >= 1e-6;
             for (int s = 0; s <= k; s++) {
                 double t = (double) s / k;
-                if (s == k && i + 1 < n) continue; // конец отрезка = начало следующего
+                if (s == k && nextSegmentSampled) continue; // конец отрезка = начало следующего
                 double x = a.x + dx * t, z = a.z + dz * t, y = a.y + (b.y - a.y) * t;
                 double pen = Math.abs(y - myY) > 1.5 ? PEN_FLOOR : 0;
                 if (!Double.isNaN(prefPos)) {
@@ -232,12 +235,14 @@ public final class PathFinder {
     // ── поиск ────────────────────────────────────────────────────────────────
 
     private final World w;
+    private final GroundProbe groundProbe;
     private final Params prm;
     // кэш мира: верх коллизии ×1024 (−1 — нет) и опасность
     private final CellCache cache = new CellCache();
 
     public PathFinder(World world, Params params) {
         this.w = world;
+        this.groundProbe = new GroundProbe(world);
         this.prm = params == null ? new Params() : params;
     }
 
@@ -381,9 +386,14 @@ public final class PathFinder {
     private int side;
     private Map<Long, List<Goal>> goalsAt;
 
-    private static long key(int x, int z, double feet) {
+    private long key(int x, int z, double feet) {
+        return packKey(x - sx, z - sz, feet);
+    }
+
+    /** x/z are offsets from the search start (20 bits each), so far-apart nodes cannot collide. */
+    static long packKey(int dx, int dz, double feet) {
         long y = Math.round(feet * 64) + (1 << 20);
-        return ((long) (x & 0xFFFFF) << 42) | ((long) (z & 0xFFFFF) << 22) | (y & 0x3FFFFF);
+        return ((long) (dx & 0xFFFFF) << 42) | ((long) (dz & 0xFFFFF) << 22) | (y & 0x3FFFFF);
     }
 
     private static long col(int x, int z) {
@@ -559,7 +569,7 @@ public final class PathFinder {
                     if (Math.abs(gl.y - y) > LEVEL_TOL) continue;
                     if (mv[id] != Move.FLY.ordinal()
                             && mv[id] != Move.CLIMB.ordinal()
-                            && !new GroundProbe(w).clear(x + .5, y, z + .5, gl.x, gl.z, .30)) continue;
+                            && !groundProbe.clear(x + .5, y, z + .5, gl.x, gl.z, .30)) continue;
                     if (mv[id] == Move.FLY.ordinal()
                             && !NavigationMotion.airClear(w, x + .5, y, z + .5, gl.x, gl.y, gl.z, .32)) continue;
                     double cos = ax * gl.dirX + az * gl.dirZ; // 1 — по ходу, −1 — навстречу
@@ -626,7 +636,7 @@ public final class PathFinder {
                 boolean pass = m == Move.WALK
                         ? (mv[id] == Move.CLIMB.ordinal()
                                 ? climbSweep(x + .5, y, z + .5, x2 + .5, f, z2 + .5)
-                                : new GroundProbe(w).clear(x + .5, y, z + .5, x2 + .5, z2 + .5, .30))
+                                : groundProbe.clear(x + .5, y, z + .5, x2 + .5, z2 + .5, .30))
                         : m == Move.JUMP
                                 ? GroundTransition.jumpClear(w, x + .5, y, z + .5, x2 + .5, f, z2 + .5)
                                 : NavigationDrop.clear(w, x + .5, y, z + .5, x2 + .5, f, z2 + .5);
@@ -936,7 +946,7 @@ public final class PathFinder {
         if (w.exactAt(a[0], a[2], .31) && w.exactAt(b[0], b[2], .31))
             return !doorAt(fl(a[0]), fl(a[2]), a[1], a[1] + BODY)
                     && !doorAt(fl(b[0]), fl(b[2]), b[1], b[1] + BODY)
-                    && new GroundProbe(w).clear(a[0], a[1], a[2], b[0], b[2], .31);
+                    && groundProbe.clear(a[0], a[1], a[2], b[0], b[2], .31);
         if (len < 1e-6) return true;
         double ux = dx / len, uz = dz / len;
         int steps = (int) Math.ceil(len / 0.2);
