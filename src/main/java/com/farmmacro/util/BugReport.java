@@ -8,10 +8,15 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -40,6 +45,9 @@ public final class BugReport {
             Pattern.compile("(?<![0-9.])(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?::[0-9]{1,5})?(?![0-9])");
     private static final Pattern UUID =
             Pattern.compile("(?i)\\b[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}\\b");
+    /** Чужие ники и личные списки — не попадают в отчёт. */
+    private static final List<String> PERSONAL_KEYS = List.of("friendNames", "chatKeywords", "aimManualName");
+
     private static volatile String status = "";
 
     private BugReport() {}
@@ -73,6 +81,8 @@ public final class BugReport {
         JsonElement p = PrivateText.portable(config);
         if (p instanceof JsonObject o) {
             for (String k : List.copyOf(o.keySet())) if (k.startsWith("webhook")) o.remove(k);
+            for (String k : PERSONAL_KEYS) o.remove(k);
+            if (o.get("combatPanic") instanceof JsonObject cp) cp.remove("friends");
         }
         return new GsonBuilder().setPrettyPrinting().create().toJson(p);
     }
@@ -103,22 +113,39 @@ public final class BugReport {
             throws IOException {
         Files.createDirectories(out.getParent());
         String logText = readTail(log);
-        try (OutputStream fo = Files.newOutputStream(out);
-                ZipOutputStream zip = new ZipOutputStream(fo, StandardCharsets.UTF_8)) {
-            put(zip, "README.txt", readme());
-            put(zip, "diagnostics.txt", redact(diagnostics, names, home));
-            put(zip, "mods.txt", mods());
-            put(zip, "farmmacro.json", redact(config, names, home));
-            put(zip, "latest.log", redact(logText, names, home));
+        Path tmp = out.resolveSibling(out.getFileName() + ".tmp");
+        try {
+            try (OutputStream fo = Files.newOutputStream(tmp);
+                    ZipOutputStream zip = new ZipOutputStream(fo, StandardCharsets.UTF_8)) {
+                put(zip, "README.txt", readme());
+                put(zip, "diagnostics.txt", redact(diagnostics, names, home));
+                put(zip, "mods.txt", mods());
+                put(zip, "farmmacro.json", redact(config, names, home));
+                put(zip, "latest.log", redact(logText, names, home));
+            }
+            try {
+                Files.move(tmp, out, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, out, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(tmp);
         }
     }
 
     private static String readTail(Path log) throws IOException {
         if (!Files.isRegularFile(log, LinkOption.NOFOLLOW_LINKS)) return "(logs/latest.log не найден)";
-        byte[] all = Files.readAllBytes(log);
-        int from = Math.max(0, all.length - LOG_TAIL_BYTES);
-        String s = new String(all, from, all.length - from, StandardCharsets.UTF_8);
-        return from > 0 ? "(… начало журнала обрезано, последние " + LOG_TAIL_BYTES / 1024 + " КБ)\n" + s : s;
+        try (SeekableByteChannel ch = Files.newByteChannel(log, StandardOpenOption.READ)) {
+            long size = ch.size();
+            long from = Math.max(0, size - LOG_TAIL_BYTES);
+            ch.position(from);
+            ByteBuffer buf = ByteBuffer.allocate((int) (size - from));
+            while (buf.hasRemaining() && ch.read(buf) > 0) {
+                // читаем до конца хвоста
+            }
+            String s = new String(buf.array(), 0, buf.position(), StandardCharsets.UTF_8);
+            return from > 0 ? "(… начало журнала обрезано, последние " + LOG_TAIL_BYTES / 1024 + " КБ)\n" + s : s;
+        }
     }
 
     private static String mods() {

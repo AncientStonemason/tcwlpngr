@@ -147,11 +147,16 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
 
     private void insert(String s) {
         StringBuilder clean = new StringBuilder();
-        s.codePoints().filter(cp -> cp >= 32 && cp != 127).forEach(clean::appendCodePoint);
+        s.codePoints().filter(cp -> cp >= 32 && cp != 127 && cp != 0xA7).forEach(clean::appendCodePoint);
         String add = clean.toString();
         int room = MAX_LEN - text.length();
         if (room <= 0 || add.isEmpty()) return;
-        if (add.length() > room) add = add.substring(0, room);
+        if (add.length() > room) {
+            int end = room;
+            if (Character.isHighSurrogate(add.charAt(end - 1))) end--;
+            add = add.substring(0, end);
+            if (add.isEmpty()) return;
+        }
         text = text.substring(0, cursor) + add + text.substring(cursor);
         cursor += add.length();
         confirmOverwrite = null;
@@ -170,6 +175,14 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
         while (i < text.length() && text.charAt(i) == ' ') i++;
         while (i < text.length() && text.charAt(i) != ' ') i++;
         return i;
+    }
+
+    private int viewOffset(int fw) {
+        int offset = 0;
+        while (offset < cursor && font.width(text.substring(offset)) > fw - 14) {
+            offset = text.offsetByCodePoints(offset, 1);
+        }
+        return offset;
     }
 
     // ── Ввод ─────────────────────────────────────────────────────────────────
@@ -195,7 +208,7 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
             } // Esc
             case 259 -> { // Backspace
                 if (cursor > 0) {
-                    int from = ctrl ? wordLeft() : cursor - 1;
+                    int from = ctrl ? wordLeft() : text.offsetByCodePoints(cursor, -1);
                     text = text.substring(0, from) + text.substring(cursor);
                     cursor = from;
                     confirmOverwrite = null;
@@ -204,18 +217,18 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
             }
             case 261 -> { // Delete
                 if (cursor < text.length()) {
-                    int to = ctrl ? wordRight() : cursor + 1;
+                    int to = ctrl ? wordRight() : text.offsetByCodePoints(cursor, 1);
                     text = text.substring(0, cursor) + text.substring(to);
                     confirmOverwrite = null;
                 }
                 return true;
             }
             case 263 -> {
-                cursor = ctrl ? wordLeft() : Math.max(0, cursor - 1);
+                cursor = ctrl ? wordLeft() : (cursor > 0 ? text.offsetByCodePoints(cursor, -1) : 0);
                 return true;
             } // ←
             case 262 -> {
-                cursor = ctrl ? wordRight() : Math.min(text.length(), cursor + 1);
+                cursor = ctrl ? wordRight() : (cursor < text.length() ? text.offsetByCodePoints(cursor, 1) : cursor);
                 return true;
             } // →
             case 268 -> {
@@ -233,10 +246,9 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
             return true;
         }
         if (ctrl && e.key() == 65) {
-            text = "";
-            cursor = 0;
+            cursor = text.length();
             return true;
-        } // Ctrl+A — очистить поле
+        } // Ctrl+A — без выделения: курсор в конец
         return super.keyPressed(e);
     }
 
@@ -257,9 +269,10 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
         if (Ui.inside(e.x(), e.y(), x + 10, fieldY(), w - 20, 18)) {
             // курсор туда, куда кликнули
             int rel = (int) e.x() - (x + 16);
+            int off = viewOffset(w - 20);
             int best = text.length();
-            for (int i = 0; i <= text.length(); i++) {
-                if (font.width(text.substring(0, i)) >= rel) {
+            for (int i = off; i <= text.length(); i = i < text.length() ? text.offsetByCodePoints(i, 1) : i + 1) {
+                if (font.width(text.substring(off, i)) >= rel) {
                     best = i;
                     break;
                 }
@@ -292,12 +305,8 @@ public class SaveMacroScreen extends Screen implements Rows.Ctx {
             Ui.text(g, font, target.placeholder(), tx, fy + 5, Ui.DIM);
         }
         // если текст длиннее поля — показываем хвост
-        String visible = text;
-        int offset = 0;
-        while (font.width(visible) > fw - 14 && offset < cursor) {
-            offset++;
-            visible = text.substring(offset);
-        }
+        int offset = viewOffset(fw);
+        String visible = text.substring(offset);
         visible = font.plainSubstrByWidth(visible, fw - 12);
         Ui.text(g, font, visible, tx, fy + 5, Ui.TEXT);
         if ((Clock.millis() / 500) % 2 == 0) {
