@@ -9,6 +9,7 @@ final class DragWindow {
     private boolean drag;
     private double sx, sy;
     private int oldX, oldY;
+    private int maxX, maxY;
 
     int x(int width, int w) {
         return Math.clamp((width - w) / 2 + ox, 0, Math.max(0, width - w));
@@ -33,14 +34,17 @@ final class DragWindow {
         sy = my;
         oldX = x - (width - w) / 2;
         oldY = y - (height - h) / 2;
+        // Предел смещения: иначе за краем экрана оно копится, и окно «залипает» при возврате мыши.
+        maxX = Math.max(0, (width - w + 1) / 2);
+        maxY = Math.max(0, (height - h + 1) / 2);
         drag = true;
         return true;
     }
 
     boolean move(double mx, double my) {
         if (!drag) return false;
-        ox = oldX + (int) Math.round(mx - sx);
-        oy = oldY + (int) Math.round(my - sy);
+        ox = Math.clamp(oldX + (int) Math.round(mx - sx), -maxX, maxX);
+        oy = Math.clamp(oldY + (int) Math.round(my - sy), -maxY, maxY);
         return true;
     }
 
