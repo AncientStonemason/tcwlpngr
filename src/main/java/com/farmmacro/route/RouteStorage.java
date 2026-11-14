@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -28,7 +27,7 @@ public final class RouteStorage {
 
     public record RouteInfo(String name, int points, String dimension, String world, String filename, long modified) {}
 
-    private final Map<String, RouteInfo> cache = new HashMap<>();
+    private final Map<String, RouteInfo> cache = new java.util.concurrent.ConcurrentHashMap<>();
 
     private RouteStorage() {}
 
@@ -86,10 +85,12 @@ public final class RouteStorage {
     public List<RouteInfo> list() {
         List<RouteInfo> out = new ArrayList<>();
         if (!Files.isDirectory(DIR)) return out;
+        java.util.Set<String> seen = new java.util.HashSet<>();
         try (Stream<Path> s = Files.list(DIR)) {
             for (Path f :
                     (Iterable<Path>) s.filter(p -> p.getFileName().toString().endsWith(".json"))::iterator) {
                 String fn = f.getFileName().toString();
+                seen.add(fn);
                 long mod = Files.getLastModifiedTime(f).toMillis();
                 RouteInfo info = cache.get(fn);
                 if (info == null || info.modified() != mod) {
@@ -101,6 +102,7 @@ public final class RouteStorage {
                 }
                 out.add(info);
             }
+            cache.keySet().retainAll(seen);
         } catch (Exception e) {
             LOGGER.warn("Не удалось прочитать список маршрутов: {}", e.toString());
         }
@@ -127,6 +129,7 @@ public final class RouteStorage {
             if (r.version > PointRoute.VERSION)
                 LOGGER.warn("Маршрут {} новее мода (версия {}), читаю что понимаю", f.getFileName(), r.version);
             r.sanitize();
+            RouteBuffer.capPoints(r);
             return r;
         } catch (Exception e) {
             LOGGER.error("Повреждён файл маршрута {}: {}", f.getFileName(), e.toString());

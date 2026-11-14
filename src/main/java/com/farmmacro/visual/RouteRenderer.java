@@ -148,6 +148,8 @@ public final class RouteRenderer {
     /** Проблемы отрезков (Terrain) — только в редакторе; пересчёт при правке маршрута и раз в секунду (мир меняется). */
     private static byte[] issues;
 
+    private static final Terrain.Issue[] ISSUES = Terrain.Issue.values();
+
     private static boolean issuesFor;
     private static long issuesMs;
     /** Первая проблема маршрута для HUD редактора («Отрезок 3→4: препятствие») или null. */
@@ -211,7 +213,7 @@ public final class RouteRenderer {
     public static Terrain.Issue issueAt(int i) {
         byte[] is = issues;
         if (is == null || i < 0 || i >= is.length) return Terrain.Issue.OK;
-        return Terrain.Issue.values()[is[i]];
+        return ISSUES[is[i]];
     }
 
     private static void collect(LevelRenderContext ctx) {
@@ -274,9 +276,13 @@ public final class RouteRenderer {
         final float pulse = (float) (0.65 + 0.35 * Math.sin(ms / 220.0));
         final boolean pts = points;
         final RoutePath variant = editorActive ? previewPath(c) : null;
-        final var endSettings = RouteBuffer.INSTANCE.settings().routeEnd.copy();
-        final var exitPoints =
-                RouteBuffer.INSTANCE.points().stream().map(RoutePoint::copy).toList();
+        // Только редактор рисует маршрут выхода: вне его копии не нужны.
+        final var endSettings = editorActive
+                ? RouteBuffer.INSTANCE.settings().routeEnd.copy()
+                : RouteBuffer.INSTANCE.settings().routeEnd;
+        final List<RoutePoint> exitPoints = editorActive
+                ? RouteBuffer.INSTANCE.points().stream().map(RoutePoint::copy).toList()
+                : List.of();
 
         PoseStack ps = ctx.poseStack();
         ps.pushPose();

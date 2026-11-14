@@ -25,7 +25,6 @@ import com.google.gson.JsonParser;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -1032,7 +1031,13 @@ public class ModConfig {
         if (lastSeenVersion == null) lastSeenVersion = "";
         if (hudSlots == null) hudSlots = new LinkedHashMap<>();
         hudSlots.values().removeIf(Objects::isNull);
-        if (hudSlots.size() > 64) hudSlots.clear();
+        if (hudSlots.size() > 64) {
+            var it = hudSlots.keySet().iterator();
+            for (int i = 0; it.hasNext(); i++) {
+                it.next();
+                if (i >= 64) it.remove();
+            }
+        }
         if (hudInventoryVisibilityRevision < 1) {
             if (hudInventory) {
                 var s = hudSlots.computeIfAbsent("inventory", k -> new HudSlot());
@@ -1336,11 +1341,12 @@ public class ModConfig {
             if (tree != null && tree.isJsonObject()) migration = ConfigMigrator.migrate(tree.getAsJsonObject());
             ModConfig loaded = tree == null || tree.isJsonNull() ? null : GSON.fromJson(tree, ModConfig.class);
             INSTANCE = loaded != null ? loaded : new ModConfig();
-            if (migration != null && migration.newerThanThisBuild())
+            if (migration != null && migration.newerThanThisBuild()) {
+                backupBeforeMigration(CONFIG_PATH, migration.from());
                 LOGGER.warn(
                         "farmmacro.json от более новой версии мода: {}. Незнакомые поля будут потеряны при сохранении",
                         migration.notes());
-            else if (migration != null && migration.changed()) {
+            } else if (migration != null && migration.changed()) {
                 backupBeforeMigration(CONFIG_PATH, migration.from());
                 LOGGER.info("Конфиг обновлён до схемы {}: {}", migration.to(), migration.notes());
                 resave = true;
@@ -1350,8 +1356,8 @@ public class ModConfig {
             INSTANCE = new ModConfig();
             // v1.11: ниже конфиг может пересохраниться (стандартные пресеты) — сначала сохранить битый файл рядом
             try {
-                Path bak = CONFIG_PATH.resolveSibling("farmmacro.json.broken");
-                Files.copy(CONFIG_PATH, bak, StandardCopyOption.REPLACE_EXISTING);
+                Path bak = CONFIG_PATH.resolveSibling("farmmacro.json.broken-" + com.farmmacro.util.Clock.wallMillis());
+                Files.copy(CONFIG_PATH, bak);
                 LOGGER.warn("Битый конфиг сохранён как {}", bak);
             } catch (Exception e2) {
                 LOGGER.error("Не удалось сохранить копию битого конфига", e2);
